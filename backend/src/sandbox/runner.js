@@ -34,7 +34,7 @@ const LANGUAGE_CONFIG = {
     runCmd: './main'
   },
   java: {
-    image: 'openjdk:21-slim',
+    image: 'eclipse-temurin:21-jdk-alpine',
     filename: 'Main.java',
     compileCmd: 'javac Main.java',
     runCmd: 'java Main'
