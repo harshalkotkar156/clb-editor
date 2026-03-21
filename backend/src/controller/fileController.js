@@ -144,7 +144,7 @@ function getDefaultCode(language) {
   const templates = {
     python: `# Python\nprint("Hello, World!")`,
     javascript: `// JavaScript\nconsole.log("Hello, World!");`,
-    cpp: `#include<iostream>\nusing namespace std;\nint main(){\n    cout<<"Hello, World!"<<endl;\n    return 0;\n}`,
+    cpp: `#include<iostream>\n #include<bits/stdc++.h>\n using namespace std;\nint main(){\n    cout<<"Hello, World!"<<endl;\n    return 0;\n}`,
     java: `public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}`
   };
   return templates[language] || '';

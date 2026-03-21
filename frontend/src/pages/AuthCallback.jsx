@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import { jwtDecode } from 'jwt-decode';   // npm install jwt-decode
+import {jwtDecode} from 'jwt-decode'; 
 
 import { loginSuccess } from '../store/slices/authSlice';
 
@@ -40,3 +40,14 @@ const AuthCallback = () => {
 };
 
 export default AuthCallback;
+
+
+// import React from 'react'
+
+// const AuthCallback = () => {
+//   return (
+//     <div>AuthCallback</div>
+//   )
+// }
+
+// export default AuthCallback

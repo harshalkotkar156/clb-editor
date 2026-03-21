@@ -30,8 +30,8 @@ export const googleAuthCallback = [
       { expiresIn: '7d' }
     );
 
-    // redirect user to frontend with token
-    res.redirect(`${process.env.CLIENT_URL}/dashboard?token=${token}`);
+    // redirect user to frontend auth callback with token
+    res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
   }
 ];
 
