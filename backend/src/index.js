@@ -7,7 +7,7 @@ import passport from 'passport';
 
 import authRouter from './routes/auth.js';
 import executeRouter from "./routes/execute.js";
-
+import filesRouter from "./routes/filesRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,7 +25,9 @@ await connectDB();
 
 // routes
 app.use('/api/v1/auth', authRouter); 
-app.use('/api/v1/execute', executeRouter);
+app.use('/api/v1/code', executeRouter);
+app.use('/api/v1/files',filesRouter);
+
 
 // health check
 app.get('/health', (req, res) => {
