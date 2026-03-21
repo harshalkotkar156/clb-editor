@@ -2,20 +2,30 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import connectDB from './config/db.js';
-import executeRouter from './routes/execute.js';
+
+import passport from 'passport';
+
+import authRouter from './routes/auth.js';
+import executeRouter from "./routes/execute.js";
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // middleware
-app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+app.use(cors({
+  origin: process.env.CLIENT_URL,
+  credentials: true
+}));
 
+app.use(express.json({ limit: '1mb' }));
+app.use(passport.initialize());
 // connect DB
 await connectDB();
 
 // routes
-app.use('/api', executeRouter);
+app.use('/api/v1/auth', authRouter); 
+app.use('/api/v1/execute', executeRouter);
 
 // health check
 app.get('/health', (req, res) => {
