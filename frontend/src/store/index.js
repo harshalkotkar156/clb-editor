@@ -1,11 +1,15 @@
+
 import { configureStore } from '@reduxjs/toolkit';
-import authReducer from './slices/authSlice.js';
+import authReducer from '../features/auth/authSlice';
+import filesReducer from '../features/files/filesSlice';
+import editorReducer from '../features/editor/editorSlice';
+import executionReducer from '../features/execution/executionSlice';
 
-const store = configureStore({
+export const store = configureStore({
   reducer: {
-    auth: authReducer
-    
-  }
+    auth:      authReducer,
+    files:     filesReducer,
+    editor:    editorReducer,
+    execution: executionReducer,
+  },
 });
-
-export default store;

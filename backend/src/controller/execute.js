@@ -9,10 +9,18 @@ const MAX_CODE_LENGTH = 50000;
 export const executeCode = async (req, res) => {
   try {
     const { language, code, stdin = '' } = req.body;
-
+  
     if (!language || !code) {
       return res.status(400).json({ error: 'language and code are required' });
     }
+    const userId = req.user._id;
+    if(!userId){
+      return res.status(400).json({
+          success:false,
+          message : "User is not added"
+      });
+    }
+
 
     if (!SUPPORTED_LANGUAGES.includes(language)) {
       return res.status(400).json({
@@ -25,13 +33,14 @@ export const executeCode = async (req, res) => {
     }
 
     const jobId = uuidv4();
+    
 
-    await Execution.create({ jobId, language, code, stdin });
-
+    await Execution.create({ jobId, language, code, stdin,user:userId });
+    
     await codeQueue.add('run-code', { jobId, language, code, stdin });
 
-    console.log(`[API] Job ${jobId} queued — ${language}`);
-
+    // console.log(`[API] Job ${jobId} queued — ${language}`);
+    
     return res.status(202).json({
       jobId,
       status: 'queued',
@@ -39,7 +48,7 @@ export const executeCode = async (req, res) => {
     });
 
   } catch (err) {
-    console.error('[API] Execute error:', err);
+    console.error('[API] Execute error:', err.message);
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
