@@ -269,7 +269,7 @@ import {
     selectExecution, selectIsPolling
 } from '../features/execution/executionSlice';
 import { selectFiles } from '../features/files/filesSlice';
-import { usePolling } from '../hooks/usePolling.js ';
+import { usePolling } from '../hooks/usePolling.js';
 
 import Sidebar from '../components/Sidebar';
 import OutputPanel from '../components/OutputPanel';

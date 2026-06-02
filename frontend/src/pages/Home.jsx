@@ -1,6 +1,6 @@
 import { FaHeart } from "react-icons/fa";
 import React, { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 
 /*
@@ -53,6 +53,11 @@ const CODE = [
   [{t:'pl',v:'};'}],
 ]
 const TC = { kw:'#22d3ee', fn:'#a78bfa', v:'#f59e0b', pl:'#cbd5e1' }
+
+const ROOM_ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+const generateRoomId = () => (
+  Array.from({ length: 8 }, () => ROOM_ID_CHARS[Math.floor(Math.random() * ROOM_ID_CHARS.length)]).join('')
+)
 
 function EditorPreview() {
   const total = CODE.reduce((a, l) => a + l.reduce((b, t) => b + t.v.length, 0), 0)
@@ -281,7 +286,9 @@ function ShareWidget() {
 // ─── Main ─────────────────────────────────────────────────────────────────
 export default function Home() {
   const { isAuthenticated } = useSelector(s => s.auth)
+  const navigate = useNavigate()
   const [scrolled, setScrolled] = useState(false)
+  const [roomIdInput, setRoomIdInput] = useState('')
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 10)
@@ -291,6 +298,17 @@ export default function Home() {
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
   const login = () => { window.location.href = 'http://localhost:3000/api/v1/auth/google' }
+
+  const handleCreateRoom = () => {
+    const roomId = generateRoomId()
+    navigate(`/room/${roomId}`, { state: { isHost: true } })
+  }
+
+  const handleJoinRoom = () => {
+    const trimmed = roomIdInput.trim().toUpperCase()
+    if (!trimmed) return
+    navigate(`/room/${trimmed}`)
+  }
 
   return (
     <>
@@ -379,6 +397,40 @@ export default function Home() {
               </svg>
               Watch Demo
             </button>
+          </div>
+
+          {/* Collab quick actions */}
+          <div className="fu d4 w-full max-w-[720px] mb-10">
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 md:p-5">
+              <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0f1117] border border-white/[0.08]">
+                  <span className="text-[11px] text-slate-500 font-mono uppercase tracking-widest">Room</span>
+                  <input
+                    value={roomIdInput}
+                    onChange={e => setRoomIdInput(e.target.value.toUpperCase())}
+                    onKeyDown={e => e.key === 'Enter' && handleJoinRoom()}
+                    maxLength={8}
+                    placeholder="Enter room ID"
+                    className="flex-1 bg-transparent text-[13px] text-slate-200 outline-none placeholder:text-slate-600 font-mono"
+                  />
+                  <button
+                    onClick={handleJoinRoom}
+                    className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white bg-white/[0.08] hover:bg-white/[0.12] transition-colors"
+                  >
+                    Join Room
+                  </button>
+                </div>
+                <button
+                  onClick={handleCreateRoom}
+                  className="px-4 py-2 rounded-xl text-[13px] font-semibold text-black bg-cyan-400 hover:bg-cyan-300 transition-colors shadow-md shadow-cyan-500/30"
+                >
+                  Create Room
+                </button>
+              </div>
+              <div className="mt-2 text-[11px] text-slate-500">
+                Room IDs are 8-character codes. Create a new room or join an active one.
+              </div>
+            </div>
           </div>
 
           {/* Stats row */}

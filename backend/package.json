@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "worker": "node src/workers/codeWorker.js"
+    "worker": "node src/workers/codeWorker.js",
+    "collab": "node src/collaborationServer.js",
+    "collab:dev": "nodemon src/collaborationServer.js"
   },
   "type": "module",
   "keywords": [],
@@ -27,7 +29,8 @@
     "socket.io": "^4.8.3",
     "uuid": "^13.0.0",
     "ws": "^8.21.0",
-    "y-websocket": "^3.0.0"
+    "y-websocket": "^1.5.4",
+    "yjs": "^13.6.31"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

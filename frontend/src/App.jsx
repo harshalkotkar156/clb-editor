@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard.jsx';
 import AuthCallback from "./pages/AuthCallback.jsx";
 import Error from './pages/Error.jsx'
 import Editor from './pages/Editor.jsx';
+import RoomPage from './pages/RoomPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 const App = () => {
@@ -37,6 +38,8 @@ const App = () => {
         <Route path="/editor/new" element={
           <ProtectedRoute><Editor /></  ProtectedRoute>
         } />
+
+        <Route path="/room/:roomId" element={<RoomPage />} />
 
         {/* OAuth callback route — processes token then navigates to dashboard */}
         <Route path="/auth/callback" element={<AuthCallback />} />
