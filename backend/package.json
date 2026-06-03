@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "worker": "node src/workers/codeWorker.js",
     "collab": "node src/collaborationServer.js",
-    "collab:dev": "nodemon src/collaborationServer.js"
+    "collab:dev": "nodemon src/collaborationServer.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run worker\""
   },
   "type": "module",
   "keywords": [],
@@ -33,6 +34,7 @@
     "yjs": "^13.6.31"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "nodemon": "^3.1.14"
   }
 }
