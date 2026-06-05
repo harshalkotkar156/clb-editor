@@ -262,7 +262,7 @@ export default function Dashboard() {
           <span className="text-sm text-gray-400 hidden sm:block">{user?.name}</span>
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 px-3 py-1.5 rounded-lg border border-white/[0.07] hover:border-red-500/30 hover:bg-red-500/5 transition-all"
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 px-3 py-1.5 rounded-lg border border-white/[0.07] hover:border-red-500/30 hover:bg-red-500/5 transition-all hover:cursor-pointer"
           >
             <FiLogOut size={13} /> Logout
           </button>
@@ -284,7 +284,7 @@ export default function Dashboard() {
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-black text-sm font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20"
+            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-black text-sm font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20 hover:cursor-pointer"
           >
             <FiPlus size={15} /> New File
           </button>

@@ -400,7 +400,7 @@ export default function Home() {
           </div>
 
           {/* Collab quick actions */}
-          <div className="fu d4 w-full max-w-[720px] mb-10">
+          {/* <div className="fu d4 w-full max-w-[720px] mb-10">
             <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 md:p-5">
               <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
                 <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0f1117] border border-white/[0.08]">
@@ -431,7 +431,7 @@ export default function Home() {
                 Room IDs are 8-character codes. Create a new room or join an active one.
               </div>
             </div>
-          </div>
+          </div> */}
 
           {/* Stats row */}
           <div className="fu d5 flex flex-wrap justify-center gap-10 mb-16">

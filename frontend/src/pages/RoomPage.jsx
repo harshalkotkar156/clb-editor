@@ -1,42 +1,52 @@
+
 // import { useEffect, useMemo, useState } from 'react';
 // import { useLocation, useNavigate, useParams } from 'react-router-dom';
+// import { useSelector } from 'react-redux';
+// import { selectUser, selectIsAuthenticated } from '../features/auth/authSlice';
 // import CollaborativeEditor from '../components/CollaborativeEditor.jsx';
 
 // const normalizeRoomId = (value) => (value || '').toUpperCase();
 
 // export default function RoomPage() {
 //   const { roomId: rawRoomId } = useParams();
-//   const roomId = useMemo(() => normalizeRoomId(rawRoomId), [rawRoomId]);
-//   const location = useLocation();
-//   const navigate = useNavigate();
+//   const roomId                = useMemo(() => normalizeRoomId(rawRoomId), [rawRoomId]);
+//   const location              = useNavigate();
+//   const navigate              = useNavigate();
 
-//   const isHost = Boolean(location.state?.isHost);
+//   // ✅ get real auth user from Redux
+//   const user            = useSelector(selectUser);
+//   const isAuthenticated = useSelector(selectIsAuthenticated);
 
-//   const [username, setUsername] = useState(() => localStorage.getItem('collab_username') || '');
-//   const [nameInput, setNameInput] = useState(username);
+//   const isHost      = Boolean(useLocation().state?.isHost);
 //   const [roomError, setRoomError] = useState('');
 //   const [allowCreate, setAllowCreate] = useState(() => {
 //     const lastRoom = localStorage.getItem('collab_last_room') || '';
 //     return isHost || lastRoom === roomId;
 //   });
 
+//   // ✅ redirect to login if not authenticated
+//   // store the room URL so we redirect back after login
+//   useEffect(() => {
+//     if (!isAuthenticated) {
+//       navigate('/', {
+//         state: { redirectAfterLogin: `/room/${roomId}` },
+//         replace: true,
+//       });
+//     }
+//   }, [isAuthenticated, roomId, navigate]);
+
 //   useEffect(() => {
 //     const lastRoom = localStorage.getItem('collab_last_room') || '';
 //     setAllowCreate(isHost || lastRoom === roomId);
 //   }, [isHost, roomId]);
 
-//   const handleNameSubmit = (e) => {
-//     e.preventDefault();
-//     const trimmed = nameInput.trim();
-//     if (!trimmed) return;
-//     localStorage.setItem('collab_username', trimmed);
-//     setUsername(trimmed);
-//   };
-
 //   const handleJoined = () => {
 //     localStorage.setItem('collab_last_room', roomId);
 //     setAllowCreate(true);
 //   };
+
+//   // not authenticated — show nothing while redirecting
+//   if (!isAuthenticated) return null;
 
 //   if (!roomId) {
 //     return (
@@ -45,10 +55,10 @@
 //           <h1 className="text-lg font-semibold">Invalid room</h1>
 //           <p className="text-sm text-gray-400 mt-2">The room ID in the URL is missing or invalid.</p>
 //           <button
-//             onClick={() => navigate('/')}
+//             onClick={() => navigate('/dashboard')}
 //             className="mt-4 px-4 py-2 rounded-lg bg-cyan-400 text-black text-sm font-semibold"
 //           >
-//             Back to Home
+//             Back to Dashboard
 //           </button>
 //         </div>
 //       </div>
@@ -63,10 +73,10 @@
 //           <p className="text-sm text-gray-400 mt-2">{roomError}</p>
 //           <div className="mt-5 flex items-center justify-center gap-3">
 //             <button
-//               onClick={() => navigate('/')}
+//               onClick={() => navigate('/dashboard')}
 //               className="px-4 py-2 rounded-lg bg-gray-800 text-gray-200 text-sm font-semibold"
 //             >
-//               Back to Home
+//               Back to Dashboard
 //             </button>
 //             <button
 //               onClick={() => setRoomError('')}
@@ -84,141 +94,63 @@
 //     <div className="min-h-screen bg-[#0a0a0f] text-gray-200">
 //       <CollaborativeEditor
 //         roomId={roomId}
-//         username={username}
+//         username={user?.name || user?.email || 'User'} // ✅ real name from auth
 //         createIfMissing={allowCreate}
 //         onRoomError={setRoomError}
 //         onJoined={handleJoined}
 //       />
-
-//       {!username && (
-//         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-//           <form
-//             onSubmit={handleNameSubmit}
-//             className="w-full max-w-sm rounded-2xl border border-gray-800 bg-[#0f1117] p-6"
-//           >
-//             <h2 className="text-lg font-semibold">Join room {roomId}</h2>
-//             <p className="text-sm text-gray-400 mt-1">Pick a name so others can see you.</p>
-//             <input
-//               autoFocus
-//               value={nameInput}
-//               onChange={(e) => setNameInput(e.target.value)}
-//               placeholder="Your name"
-//               className="mt-4 w-full rounded-lg bg-[#0a0a0f] border border-gray-700 px-3 py-2 text-sm text-gray-200 outline-none"
-//             />
-//             <button
-//               type="submit"
-//               className="mt-4 w-full px-4 py-2 rounded-lg bg-cyan-400 text-black text-sm font-semibold"
-//             >
-//               Enter Room
-//             </button>
-//           </form>
-//         </div>
-//       )}
 //     </div>
 //   );
 // }
 
+// the aboce code is correct below is experimentation
 
-import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+
+import { useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { selectUser, selectIsAuthenticated } from '../features/auth/authSlice';
-import CollaborativeEditor from '../components/CollaborativeEditor.jsx';
+import { selectIsAuthenticated } from '../features/auth/authSlice';
 
-const normalizeRoomId = (value) => (value || '').toUpperCase();
+// RoomPage just sets up sessionStorage for the joiner
+// then redirects to /editor/collab/:roomId
+// The Editor component handles everything
+
+const ROOM_SESSION_KEY = 'collab_session';
 
 export default function RoomPage() {
-  const { roomId: rawRoomId } = useParams();
-  const roomId                = useMemo(() => normalizeRoomId(rawRoomId), [rawRoomId]);
-  const location              = useNavigate();
-  const navigate              = useNavigate();
-
-  // ✅ get real auth user from Redux
-  const user            = useSelector(selectUser);
+  const { roomId } = useParams();
+  const navigate   = useNavigate();
   const isAuthenticated = useSelector(selectIsAuthenticated);
 
-  const isHost      = Boolean(useLocation().state?.isHost);
-  const [roomError, setRoomError] = useState('');
-  const [allowCreate, setAllowCreate] = useState(() => {
-    const lastRoom = localStorage.getItem('collab_last_room') || '';
-    return isHost || lastRoom === roomId;
-  });
-
-  // ✅ redirect to login if not authenticated
-  // store the room URL so we redirect back after login
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate('/', {
-        state: { redirectAfterLogin: `/room/${roomId}` },
-        replace: true,
-      });
+      // not logged in → go to home, preserve room link
+      navigate('/', { state: { redirectAfterLogin: `/room/${roomId}` } });
+      return;
     }
-  }, [isAuthenticated, roomId, navigate]);
 
-  useEffect(() => {
-    const lastRoom = localStorage.getItem('collab_last_room') || '';
-    setAllowCreate(isHost || lastRoom === roomId);
-  }, [isHost, roomId]);
+    if (!roomId) {
+      navigate('/dashboard');
+      return;
+    }
 
-  const handleJoined = () => {
-    localStorage.setItem('collab_last_room', roomId);
-    setAllowCreate(true);
-  };
+    // ✅ store joiner session in sessionStorage
+    // Editor will read this on mount and auto-join
+    sessionStorage.setItem(ROOM_SESSION_KEY, JSON.stringify({
+      roomId:   roomId.toUpperCase(),
+      isHost:   false,
+      fileId:   null,
+      language: null,  // will be received from server
+      fileName: null,  // will be received from server
+    }));
 
-  // not authenticated — show nothing while redirecting
-  if (!isAuthenticated) return null;
-
-  if (!roomId) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] text-gray-200 flex items-center justify-center">
-        <div className="max-w-md w-full rounded-2xl border border-gray-800 bg-[#0f1117] p-6 text-center">
-          <h1 className="text-lg font-semibold">Invalid room</h1>
-          <p className="text-sm text-gray-400 mt-2">The room ID in the URL is missing or invalid.</p>
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="mt-4 px-4 py-2 rounded-lg bg-cyan-400 text-black text-sm font-semibold"
-          >
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (roomError) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] text-gray-200 flex items-center justify-center">
-        <div className="max-w-md w-full rounded-2xl border border-gray-800 bg-[#0f1117] p-6 text-center">
-          <h1 className="text-lg font-semibold">Unable to join room</h1>
-          <p className="text-sm text-gray-400 mt-2">{roomError}</p>
-          <div className="mt-5 flex items-center justify-center gap-3">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="px-4 py-2 rounded-lg bg-gray-800 text-gray-200 text-sm font-semibold"
-            >
-              Back to Dashboard
-            </button>
-            <button
-              onClick={() => setRoomError('')}
-              className="px-4 py-2 rounded-lg bg-cyan-400 text-black text-sm font-semibold"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+    // redirect to editor — editor reads sessionStorage and joins
+    navigate(`/editor/collab-${roomId.toUpperCase()}`, { replace: true });
+  }, [isAuthenticated, roomId]);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-gray-200">
-      <CollaborativeEditor
-        roomId={roomId}
-        username={user?.name || user?.email || 'User'} // ✅ real name from auth
-        createIfMissing={allowCreate}
-        onRoomError={setRoomError}
-        onJoined={handleJoined}
-      />
+    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+      <div className="text-gray-400 text-sm">Joining room...</div>
     </div>
   );
 }
