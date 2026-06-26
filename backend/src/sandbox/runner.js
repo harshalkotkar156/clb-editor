@@ -51,7 +51,7 @@ export async function runCode({ language, code, stdin = '' }) {
   }
 
   // create a unique temp directory for this job
-  const jobDir = path.join(os.tmpdir(), `job-${uuidv4()}`);
+   const jobDir = path.join(os.tmpdir(), `job-${uuidv4()}`);
   await fs.mkdir(jobDir, { recursive: true });
 
   const codeFile = path.join(jobDir, config.filename);

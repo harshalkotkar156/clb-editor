@@ -245,46 +245,46 @@ export default function Dashboard() {
     >
 
       {/* ── Navbar ── */}
-      <nav className="sticky top-0 z-40 flex items-center justify-between px-6 py-3.5 border-b border-white/[0.07] bg-[#080810]/80 backdrop-blur-xl">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center">
+      <nav className="sticky top-0 z-40 flex items-center justify-between gap-2 px-4 sm:px-6 py-3.5 border-b border-white/[0.07] bg-[#080810]/80 backdrop-blur-xl">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center shrink-0">
             <FiCode size={14} className="text-cyan-400" />
           </div>
-          <span className="font-bold text-white tracking-tight text-lg">CodeSync</span>
+          <span className="font-bold text-white tracking-tight text-lg truncate">CodeSync</span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <img
             src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.name}&background=0d0d14&color=60a5fa`}
             alt=""
             className="w-8 h-8 rounded-full border border-white/10"
           />
-          <span className="text-sm text-gray-400 hidden sm:block">{user?.name}</span>
+          <span className="text-sm text-gray-400 hidden sm:block max-w-[8rem] truncate">{user?.name}</span>
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 px-3 py-1.5 rounded-lg border border-white/[0.07] hover:border-red-500/30 hover:bg-red-500/5 transition-all hover:cursor-pointer"
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 px-2 sm:px-3 py-1.5 rounded-lg border border-white/[0.07] hover:border-red-500/30 hover:bg-red-500/5 transition-all hover:cursor-pointer"
           >
-            <FiLogOut size={13} /> Logout
+            <FiLogOut size={13} /> <span className="hidden sm:inline">Logout</span>
           </button>
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-6 py-10">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
 
         {/* ── Header ── */}
-        <div className="flex items-start justify-between mb-10">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8 sm:mb-10">
           <div>
             <p className="text-xs font-semibold text-cyan-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
               <span className="w-4 h-px bg-cyan-400 inline-block" /> Dashboard
             </p>
-            <h1 className="text-3xl font-bold text-white leading-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
               Welcome back, <span className="text-cyan-400">{user?.name?.split(' ')[0]}</span>
             </h1>
             <p className="text-gray-500 text-sm mt-1">Pick up where you left off.</p>
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-black text-sm font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20 hover:cursor-pointer"
+            className="self-start flex items-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-black text-sm font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20 hover:cursor-pointer"
           >
             <FiPlus size={15} /> New File
           </button>
@@ -336,6 +336,7 @@ export default function Dashboard() {
           </div>
 
           <div className="bg-[#0d0d14] border border-white/[0.07] rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
             {loading ? (
               <div className="flex items-center justify-center py-20 text-gray-600 text-sm gap-2">
                 <div className="w-4 h-4 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
@@ -379,6 +380,7 @@ export default function Dashboard() {
                 </tbody>
               </table>
             )}
+            </div>
           </div>
         </section>
 

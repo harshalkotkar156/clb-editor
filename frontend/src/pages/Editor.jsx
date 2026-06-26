@@ -28,8 +28,8 @@ import { VscTerminal } from 'react-icons/vsc';
 import { RiVipCrownLine } from 'react-icons/ri';
 
 // ── constants ─────────────────────────────────────────────────────────────────
-const WS_URL           = 'ws://localhost:3001/yjs';
-const SOCKET_URL       = 'http://localhost:3001';
+const WS_URL           = import.meta.env.VITE_COLLAB_WS_URL   || 'ws://localhost:3001/yjs';
+const SOCKET_URL       = import.meta.env.VITE_COLLAB_HTTP_URL || 'http://localhost:3001';
 const COLOR_PALETTE    = ['#F87171', '#34D399', '#60A5FA', '#FBBF24', '#A78BFA'];
 const ROOM_SESSION_KEY = 'collab_session';
 
@@ -236,6 +236,7 @@ export default function Editor() {
   const syncIntervalRef     = useRef(null);
   const isHostRef           = useRef(false); // ✅ ref version so callbacks see latest value
   const roomIdRef           = useRef(null);
+  const pendingYjsInitRef   = useRef(null);  // queued init when editor not yet mounted
 
   usePolling(execution.jobId, isPolling);
 
@@ -381,11 +382,21 @@ export default function Editor() {
   }, [code, fileName, isCollabMode, isHost, collabLang]);
 
   // ── start collab ──────────────────────────────────────────────────────────
-  function handleStartCollab() {
+  async function handleStartCollab() {
     const currentCode = editorRef.current?.getValue() || code || '';
     if (!currentCode.trim()) {
       alert('Please wait for the file to load before starting collaboration.');
       return;
+    }
+    // ✅ Pre-save host's latest code to MongoDB so collab server
+    //    loads the up-to-date snapshot into the Y-doc for joiners.
+    if (fileId && fileId !== 'new') {
+      try {
+        await updateFile(fileId, { code: currentCode, name: fileName });
+        dispatch(markSaved());
+      } catch (err) {
+        console.error('Pre-collab save failed:', err);
+      }
     }
     const newRoomId = generateRoomId();
     setRoomId(newRoomId);
@@ -498,18 +509,8 @@ export default function Editor() {
     awarenessListener.current = onAwarenessChange;
     provider.awareness.on('change', onAwarenessChange);
 
-    // ✅ host syncs code to MongoDB every 30s via socket
-    if (isHostRef.current) {
-      syncIntervalRef.current = setInterval(() => {
-        const latestCode = editorRef.current?.getValue();
-        if (latestCode !== undefined && socketRef.current) {
-          socketRef.current.emit('sync-code', {
-            roomId: roomIdRef.current,
-            code:   latestCode,
-          });
-        }
-      }, 30000);
-    }
+    // Server-side Yjs persistence (debounced 2s) handles autosave —
+    // no client-side polling required.
   };
 
   // ── Yjs destroy ───────────────────────────────────────────────────────────
@@ -644,14 +645,14 @@ export default function Editor() {
         fileName: roomFileName || fileName,
       }));
 
-      if (editorRef.current) {
-        // host uses their current editor code
-        // joiner uses code from server (fetched from MongoDB)
-        const codeToLoad = hostFlag
-          ? (editorRef.current.getValue() || code)
-          : (initialCode || '');
-
-        initYjs(roomId, codeToLoad);
+      // Server-side persistence loads the file code into the Y-doc.
+      // We always defer Yjs binding through pendingYjsInitRef so it
+      // runs once Monaco's model is ready (fixes joiner blank-editor
+      // race when room-joined arrives before onMount).
+      pendingYjsInitRef.current = { roomId };
+      if (editorRef.current && editorRef.current.getModel()) {
+        pendingYjsInitRef.current = null;
+        initYjs(roomId);
       }
     });
 
@@ -691,11 +692,18 @@ export default function Editor() {
     socket.on('room-closed', ({ message }) => {
       sessionStorage.removeItem(ROOM_SESSION_KEY);
       setRoomClosedMsg(message || 'Host ended the session.');
+      // For non-host: offer save-as-new-file or discard before tearing down.
+      // Editor model still holds the last code after destroyCollab, so they
+      // can save a copy. Host just exits collab cleanly.
+      const wasHost = isHostRef.current;
       destroyCollab();
       setIsCollabMode(false);
       setRoomId(null);
       setIsHost(false);
       setCollabUsers([]);
+      if (!wasHost) {
+        setShowSaveCopy(true);
+      }
     });
 
     socket.on('connect_error', (err) => {
@@ -714,6 +722,12 @@ export default function Editor() {
   const handleEditorMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    // Drain any queued Yjs init that arrived before mount (joiner race fix)
+    const pending = pendingYjsInitRef.current;
+    if (pending && pending.roomId) {
+      pendingYjsInitRef.current = null;
+      initYjs(pending.roomId);
+    }
   };
 
   const activeLang = isCollabMode ? collabLang : language;
@@ -724,10 +738,10 @@ export default function Editor() {
       <div className="flex flex-col flex-1 min-w-0">
 
         {/* Top Bar */}
-        <div className="flex items-center justify-between px-4 h-12 bg-[#0d0d14] border-b border-gray-800 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-y-2 px-3 sm:px-4 py-2 md:h-12 md:py-0 bg-[#0d0d14] border-b border-gray-800 shrink-0">
 
           {/* Left */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => navigate('/dashboard')}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 transition-all text-xs font-semibold"
@@ -834,7 +848,7 @@ export default function Editor() {
           </div>
 
           {/* Right */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {isAuthenticated && !isCollabMode && (
               <button
                 onClick={handleStartCollab}
@@ -890,9 +904,9 @@ export default function Editor() {
           </div>
         )}
 
-        {/* Body */}
-        <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1 overflow-hidden">
+        {/* Body — stacks vertically on mobile, side-by-side on md+ */}
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+          <div className="flex-1 min-h-[40vh] md:min-h-0 overflow-hidden">
             <MonacoEditor
               height="100%"
               language={MONACO_LANG_MAP[activeLang]}
@@ -911,15 +925,12 @@ export default function Editor() {
                 lineNumbersMinChars:  3,
                 renderLineHighlight:  'all',
               }}
-              onMount={(editor, monaco) => {
-                editorRef.current  = editor;
-                monacoRef.current  = monaco;
-              }}
+              onMount={handleEditorMount}
             />
           </div>
 
-          <div className="w-80 flex flex-col border-l border-gray-800 shrink-0">
-            <div className="flex flex-col border-b border-gray-800" style={{ height: '35%' }}>
+          <div className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-l border-gray-800 shrink-0 h-64 md:h-auto">
+            <div className="flex flex-col border-b border-gray-800" style={{ height: '40%' }}>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-[#0d0d14] border-b border-gray-800 shrink-0">
                 <VscTerminal size={13} className="text-gray-500" />
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">stdin</span>

@@ -4,40 +4,176 @@ import http from 'http';
 import { WebSocketServer } from 'ws';
 import { Server as SocketIOServer } from 'socket.io';
 import { createRequire } from 'module';
+import * as Y from 'yjs';
+
 const require = createRequire(import.meta.url);
-const { setupWSConnection } = require('y-websocket/bin/utils');
+const { setupWSConnection, setPersistence, docs } = require('y-websocket/bin/utils');
+
 import redis from './config/redis.js';
 import File from './models/File.js';
+import connectDB from './config/db.js';
 
-const PORT     = 3001;
-const CLIENT_URL = 'http://localhost:5173';
+connectDB();
+
+const PORT       = process.env.COLLAB_PORT || 3001;
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 const MAX_USERS  = 5;
-const ROOM_TTL   = 7200;
+const ROOM_TTL   = 7200;          // 2h Redis TTL for room metadata
+const AUTOCLOSE_MS = 2 * 60 * 60 * 1000; // hard 2h auto-end
+const DEBOUNCE_MS  = 2000;        // debounced Mongo autosave
 
 const app = express();
 app.use(express.json());
-
 app.get('/health', (_, res) =>
   res.json({ status: 'ok', service: 'collaboration', timestamp: new Date().toISOString() })
 );
 
 const server = http.createServer(app);
-
 const wss = new WebSocketServer({ noServer: true });
+
+// Map<roomName, fileId>  — set when host creates room (or recovered from Redis)
+const roomFileMap = new Map();
+// Map<roomName, NodeJS.Timeout> for debounced saves
+const saveTimers = new Map();
+// Map<roomName, NodeJS.Timeout> for 2h auto-close
+const autoCloseTimers = new Map();
+
+// ────────────────────────────────────────────────────────────────────────────
+//  Yjs persistence: load from / save to MongoDB
+// ────────────────────────────────────────────────────────────────────────────
+setPersistence({
+  bindState: async (docName, ydoc) => {
+    // docName == roomId
+    let fileId = roomFileMap.get(docName);
+    if (!fileId) {
+      try {
+        const metaRaw = await redis.get(`room:${docName}:meta`);
+        if (metaRaw) {
+          const meta = JSON.parse(metaRaw);
+          if (meta.fileId) {
+            fileId = meta.fileId;
+            roomFileMap.set(docName, fileId);
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+    if (fileId) {
+      try {
+        const file = await File.findById(fileId).select('code');
+        if (file && ydoc.getText('monaco').length === 0 && file.code) {
+          ydoc.transact(() => {
+            ydoc.getText('monaco').insert(0, file.code);
+          });
+        }
+      } catch (err) {
+        console.error(`[yjs] bindState load failed for room ${docName}:`, err.message);
+      }
+    }
+
+    // Debounced autosave on every doc update
+    const onUpdate = () => scheduleSave(docName, ydoc);
+    ydoc.on('update', onUpdate);
+    ydoc._collabOnUpdate = onUpdate;
+
+    // Start 2h auto-close timer
+    armAutoClose(docName);
+  },
+  writeState: async (docName, ydoc) => {
+    // Called when last connection closes — flush immediately
+    if (ydoc._collabOnUpdate) ydoc.off('update', ydoc._collabOnUpdate);
+    const t = saveTimers.get(docName);
+    if (t) clearTimeout(t);
+    saveTimers.delete(docName);
+    await flushSave(docName, ydoc);
+  },
+});
+
+function scheduleSave(docName, ydoc) {
+  const existing = saveTimers.get(docName);
+  if (existing) clearTimeout(existing);
+  const t = setTimeout(() => {
+    saveTimers.delete(docName);
+    flushSave(docName, ydoc).catch((err) =>
+      console.error(`[yjs] save error room ${docName}:`, err.message)
+    );
+  }, DEBOUNCE_MS);
+  saveTimers.set(docName, t);
+}
+
+async function flushSave(docName, ydoc) {
+  const fileId = roomFileMap.get(docName);
+  if (!fileId) return;
+  const code = ydoc.getText('monaco').toString();
+  try {
+    await File.findByIdAndUpdate(fileId, { code, updatedAt: new Date() });
+    console.log(`[yjs] saved room ${docName} → file ${fileId} (${code.length} chars)`);
+  } catch (err) {
+    console.error(`[yjs] mongo save failed room ${docName}:`, err.message);
+  }
+}
+
+function armAutoClose(docName) {
+  if (autoCloseTimers.has(docName)) return;
+  const t = setTimeout(async () => {
+    autoCloseTimers.delete(docName);
+    console.log(`[autoclose] room ${docName} hit 2h limit — closing`);
+    io.to(docName).emit('room-closed', { message: 'Session auto-ended after 2 hours.' });
+    await teardownRoom(docName);
+  }, AUTOCLOSE_MS);
+  autoCloseTimers.set(docName, t);
+}
+
+async function teardownRoom(roomId) {
+  // flush pending save + destroy yjs doc
+  const ydoc = docs.get(roomId);
+  if (ydoc) {
+    const t = saveTimers.get(roomId);
+    if (t) clearTimeout(t);
+    saveTimers.delete(roomId);
+    try { await flushSave(roomId, ydoc); } catch {}
+    ydoc.destroy();
+    docs.delete(roomId);
+  }
+  const at = autoCloseTimers.get(roomId);
+  if (at) clearTimeout(at);
+  autoCloseTimers.delete(roomId);
+  roomFileMap.delete(roomId);
+  await cleanupRoom(roomId);
+
+  // disconnect all sockets from the room
+  const socketsInRoom = await io.in(roomId).fetchSockets();
+  socketsInRoom.forEach((s) => s.leave(roomId));
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  WebSocket upgrade for /yjs/<roomId>
+//
+//  IMPORTANT: y-websocket's setupWSConnection derives the docName from
+//  req.url.slice(1).split('?')[0]. The client connects to /yjs/<roomId>,
+//  so without rewriting we'd get docName === "yjs/<roomId>" and the
+//  roomFileMap (keyed by raw roomId) would never match → initial code
+//  would never load from Mongo. Strip the /yjs/ prefix so docName === roomId.
+// ────────────────────────────────────────────────────────────────────────────
 wss.on('connection', (conn, req) => setupWSConnection(conn, req));
 
 server.on('upgrade', (request, socket, head) => {
-  const pathname = new URL(request.url, 'http://localhost').pathname;
-  if (pathname.startsWith('/yjs')) {
+  const url = new URL(request.url, 'http://localhost');
+  if (url.pathname.startsWith('/yjs/')) {
+    const roomId = url.pathname.slice('/yjs/'.length);
+    request.url = '/' + roomId + url.search; // docName becomes just roomId
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+  } else if (url.pathname === '/yjs' || url.pathname === '/yjs/') {
+    socket.destroy(); // missing room id
   }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+//  Socket.IO presence + control channel
+// ────────────────────────────────────────────────────────────────────────────
 const io = new SocketIOServer(server, {
   cors: { origin: CLIENT_URL, methods: ['GET', 'POST'], credentials: true },
 });
 
-// ── Redis keys ────────────────────────────────────────────────────────────────
 const rKeys = {
   users:    (r) => `room:${r}:users`,
   lang:     (r) => `room:${r}:lang`,
@@ -81,20 +217,15 @@ const removeUserFromRoom = async (roomId, socketId) => {
   await broadcastUsers(roomId);
 };
 
-// ── Socket.IO events ──────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log('connected:', socket.id);
 
   socket.on('join-room', async ({
     roomId, username, userId,
     createIfMissing, language,
-    fileName, fileId, code,
+    fileName, fileId,
   }) => {
-    // ✅ validate required fields
-    if (!roomId || !username) {
-      console.warn('join-room missing roomId or username', { roomId, username });
-      return;
-    }
+    if (!roomId || !username) return;
 
     const roomExists = await redis.exists(rKeys.lang(roomId));
 
@@ -103,8 +234,6 @@ io.on('connection', (socket) => {
         socket.emit('room-not-found');
         return;
       }
-
-      // CREATE ROOM
       await redis.set(rKeys.lang(roomId),     language || 'cpp');
       await redis.set(rKeys.host(roomId),     socket.id);
       await redis.set(rKeys.hostUser(roomId), userId || '');
@@ -113,6 +242,7 @@ io.on('connection', (socket) => {
         fileId:   fileId   || null,
       }));
       await refreshTTL(roomId);
+      if (fileId) roomFileMap.set(roomId, fileId);
       console.log(`Room ${roomId} created by ${username}, fileId: ${fileId}`);
     }
 
@@ -135,78 +265,27 @@ io.on('connection', (socket) => {
     const users           = await getUsersList(roomId, hostSocketId);
     const isHost          = socket.id === hostSocketId;
 
-    // ✅ fetch latest code from MongoDB for joiners
-    let roomCode = '';
-    let roomFileName = meta.fileName || 'Untitled';
-    if (meta.fileId) {
-      try {
-        const file = await File.findById(meta.fileId).select('code name');
-        if (file) {
-          roomCode     = file.code || '';
-          roomFileName = file.name || roomFileName;
-        }
-      } catch (err) {
-        console.error('Failed to fetch file for room:', err.message);
-      }
-    }
-
     socket.emit('room-joined', {
       roomId,
       users,
       language:  currentLanguage,
       isHost,
-      fileName:  roomFileName,
-      code:      isHost ? '' : roomCode, // host already has code in editor
+      fileName:  meta.fileName || 'Untitled',
     });
 
     io.to(roomId).emit('users-update', { users });
   });
 
-  // ── sync-code: host saves latest code to MongoDB ───────────────────────────
-  socket.on('sync-code', async ({ roomId, code }) => {
-    if (!roomId || code === undefined) return;
-
-    const hostSocketId = await redis.get(rKeys.host(roomId));
-    if (socket.id !== hostSocketId) return; // only host can sync
-
-    const metaRaw = await redis.get(rKeys.meta(roomId));
-    if (!metaRaw) return;
-    const meta = JSON.parse(metaRaw);
-    if (!meta.fileId) return;
-
-    try {
-      await File.findByIdAndUpdate(meta.fileId, { code, updatedAt: new Date() });
-      console.log(`Code synced for room ${roomId}, file ${meta.fileId}`);
-    } catch (err) {
-      console.error('sync-code error:', err.message);
-    }
-  });
-
-  // ── close-room ─────────────────────────────────────────────────────────────
   socket.on('close-room', async ({ roomId }) => {
     if (!roomId) return;
     const hostSocketId = await redis.get(rKeys.host(roomId));
     if (socket.id !== hostSocketId) return;
 
-    // save final code to MongoDB before closing
-    try {
-      const metaRaw = await redis.get(rKeys.meta(roomId));
-      if (metaRaw) {
-        const meta = JSON.parse(metaRaw);
-        // code sync happens via sync-code — no need to save here
-        // just cleanup
-      }
-    } catch {}
-
     console.log(`Room ${roomId} closed by host`);
     io.to(roomId).emit('room-closed', { message: 'Host ended the session.' });
-    await cleanupRoom(roomId);
-
-    const socketsInRoom = await io.in(roomId).fetchSockets();
-    socketsInRoom.forEach((s) => s.leave(roomId));
+    await teardownRoom(roomId);
   });
 
-  // ── leave-room ─────────────────────────────────────────────────────────────
   socket.on('leave-room', async ({ roomId }) => {
     const target = roomId || socket.data.roomId;
     if (!target) return;
@@ -214,14 +293,12 @@ io.on('connection', (socket) => {
     socket.leave(target);
   });
 
-  // ── language-change ────────────────────────────────────────────────────────
   socket.on('language-change', async ({ roomId, language }) => {
     if (!roomId || !language) return;
     await redis.set(rKeys.lang(roomId), language);
     socket.to(roomId).emit('language-change', { language });
   });
 
-  // ── disconnecting ──────────────────────────────────────────────────────────
   socket.on('disconnecting', async () => {
     const rooms = Array.from(socket.rooms).filter((r) => r !== socket.id);
     await Promise.all(rooms.map((r) => removeUserFromRoom(r, socket.id)));
