@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
+    "dev:main": "nodemon src/index.js",
+    "start:main": "node src/index.js",
     "worker": "node src/workers/codeWorker.js",
-    "collab": "node src/collaborationServer.js",
-    "collab:dev": "nodemon src/collaborationServer.js",
-    "dev:all": "concurrently \"npm run dev\" \"npm run worker\""
+    "start:collab": "node src/collaborationServer.js",
+    "dev:collab": "nodemon src/collaborationServer.js",
+    "start": "concurrently \"npm run start:main \" \"npm run start:collab\"",
+    "dev": "concurrently \"npm run dev:main \" \"npm run dev:collab\""
   },
   "type": "module",
   "keywords": [],

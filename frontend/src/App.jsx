@@ -52,9 +52,11 @@ import Error        from './pages/Error.jsx';
 import Editor       from './pages/Editor.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import RoomPage     from './pages/RoomPage.jsx';
+import { Toaster } from 'react-hot-toast';
 
 const App = () => (
   <Provider store={store}>
+    <Toaster position="top-center" reverseOrder={false}/>
     <Routes>
       <Route path="/"              element={<Home />} />
       <Route path="*"              element={<Error />} />

@@ -91,7 +91,7 @@ function RecentCard({ file, onOpen }) {
   return (
     <button
       onClick={onOpen}
-      className={`group relative w-full text-left p-4 rounded-xl border border-white/[0.08] bg-[#0d0d14] hover:border-cyan-500/40 hover:bg-[#0f0f1a] transition-all duration-200`}
+      className={`group relative w-full text-left p-4 rounded-xl border border-white/[0.08] bg-[#0d0d14] hover:border-cyan-500/40 hover:bg-[#0f0f1a] transition-all duration-200 hover:cursor-pointer`}
     >
       {/* top row */}
       <div className="flex items-start justify-between mb-3">

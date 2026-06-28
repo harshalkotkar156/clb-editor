@@ -7,6 +7,7 @@ import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from 'y-monaco';
 import { io } from 'socket.io-client';
 import { getFile, updateFile, executeCode, createFile } from '../services/api';
+import toast from 'react-hot-toast';
 import {
   openFile, setCode, setLanguage, setStdin,
   markSaved, selectCode, selectLanguage,
@@ -21,17 +22,18 @@ import { usePolling } from '../hooks/usePolling.js';
 import OutputPanel from '../components/OutputPanel';
 import {
   FiSave, FiPlay, FiChevronDown,
-  FiCopy, FiX, FiUsers,
+  FiCopy, FiX, FiUsers, FiMenu,
 } from 'react-icons/fi';
 import { IoArrowBackOutline } from 'react-icons/io5';
 import { VscTerminal } from 'react-icons/vsc';
 import { RiVipCrownLine } from 'react-icons/ri';
 
 // ── constants ─────────────────────────────────────────────────────────────────
-const WS_URL           = import.meta.env.VITE_COLLAB_WS_URL   || 'ws://localhost:3001/yjs';
-const SOCKET_URL       = import.meta.env.VITE_COLLAB_HTTP_URL || 'http://localhost:3001';
+
+const WS_URL           = import.meta.env.VITE_COLLAB_WS_URL;//   || 'ws://localhost:3001/yjs';
+const SOCKET_URL       = import.meta.env.VITE_COLLAB_HTTP_URL ;//|| 'http://localhost:3001';
 const COLOR_PALETTE    = ['#F87171', '#34D399', '#60A5FA', '#FBBF24', '#A78BFA'];
-const ROOM_SESSION_KEY = 'collab_session';
+const ROOM_SESSION_KEY = import.meta.env.VITE_ROOM_SESSION_KEY;
 
 const DEFAULT_CODE = {
   cpp:        `#include<iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}`,
@@ -97,11 +99,11 @@ function SaveCopyModal({ defaultName, language, onSave, onClose, isSaving }) {
   const [name, setName] = useState(defaultName || '');
   const meta = LANG_META[language] || LANG_META.cpp;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-sm bg-[#0d0d18] border border-white/10 rounded-2xl shadow-2xl p-6">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4">
+      <div className="w-full sm:max-w-sm bg-[#0d0d18] border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 sm:p-6">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-bold text-white">Save as New File</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><FiX size={18} /></button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 p-1"><FiX size={18} /></button>
         </div>
         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">File Name</label>
         <input
@@ -137,15 +139,15 @@ function LeaveRoomModal({ language, defaultName, onSaveAndLeave, onLeaveWithoutS
   const [name, setName] = useState(defaultName || '');
   const meta = LANG_META[language] || LANG_META.cpp;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#0d0d18] border border-white/10 rounded-2xl shadow-2xl p-6">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4">
+      <div className="w-full sm:max-w-md bg-[#0d0d18] border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 sm:p-6">
         {step === 1 && (
           <>
-            <h3 className="text-lg font-bold text-white mb-3">Leave Collaboration Room?</h3>
+            <h3 className="text-base font-bold text-white mb-2">Leave Collaboration Room?</h3>
             <p className="text-sm text-gray-400 mb-6">Do you want to save this collaborative file before leaving?</p>
             <div className="flex gap-3">
-              <button onClick={onLeaveWithoutSaving} className="flex-1 py-2.5 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5">No, just leave</button>
-              <button onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold">Yes, save first</button>
+              <button onClick={onLeaveWithoutSaving} className="flex-1 py-2.5 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 text-sm">No, just leave</button>
+              <button onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-sm">Yes, save first</button>
             </div>
           </>
         )}
@@ -153,31 +155,114 @@ function LeaveRoomModal({ language, defaultName, onSaveAndLeave, onLeaveWithoutS
           <>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-base font-bold text-white">Save Before Leaving</h3>
-              <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><FiX size={18} /></button>
+              <button onClick={onClose} className="text-gray-500 hover:text-gray-300 p-1"><FiX size={18} /></button>
             </div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">File Name</label>
             <input
               autoFocus value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter file name..."
-              className="w-full bg-[#0a0a0f] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-gray-200 mb-4"
+              className="w-full bg-[#0a0a0f] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-gray-200 mb-4 outline-none focus:border-cyan-500/50"
             />
             <div className="flex items-center gap-2 mb-5 px-3 py-2 bg-white/[0.03] rounded-lg border border-white/[0.07]">
               <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
               <span className={`text-xs font-semibold ${meta.color}`}>{meta.label}</span>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl border border-white/10 text-gray-300">Back</button>
+              <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl border border-white/10 text-gray-300 text-sm">Back</button>
               <button
                 disabled={!name.trim() || isSaving}
                 onClick={() => onSaveAndLeave(name.trim())}
-                className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-sm disabled:opacity-50"
               >
                 {isSaving ? 'Saving...' : 'Save & Leave'}
               </button>
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── CollabInfoSheet (mobile bottom sheet for room details) ────────────────────
+function CollabInfoSheet({ roomId, collabUsers, collabStatus, collabFileName, collabLang, isHost, copied, onCopyLink, onClose }) {
+  const meta = LANG_META[collabLang] || LANG_META.cpp;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full bg-[#0d0d18] border-t border-white/10 rounded-t-2xl shadow-2xl p-5 pb-8"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* drag handle */}
+        <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-5" />
+
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-bold text-white">Collaboration Room</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 p-1"><FiX size={16} /></button>
+        </div>
+
+        {/* room id + status */}
+        <div className="flex items-center justify-between mb-4 px-3 py-2.5 bg-white/[0.04] rounded-xl border border-white/[0.07]">
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-0.5">Room ID</p>
+            <p className="font-mono text-sm text-white font-bold">{roomId}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${collabStatus === 'connected' ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+            <span className="text-xs text-gray-400">{collabStatus}</span>
+          </div>
+        </div>
+
+        {/* file + lang */}
+        <div className="flex items-center gap-3 mb-4 px-3 py-2.5 bg-white/[0.04] rounded-xl border border-white/[0.07]">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-0.5">File</p>
+            <p className="text-sm text-gray-200 truncate">{collabFileName}</p>
+          </div>
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-800 rounded-md">
+            <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+            <span className={`text-xs font-semibold ${meta.color}`}>{meta.label}</span>
+          </div>
+        </div>
+
+        {/* participants */}
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Participants ({collabUsers.length}/5)</p>
+        <div className="flex flex-col gap-2 mb-5">
+          {collabUsers.map((u, i) => {
+            const color = getColorForIndex(i);
+            return (
+              <div
+                key={u.socketId}
+                className="flex items-center gap-3 px-3 py-2 rounded-xl border"
+                style={{ backgroundColor: `${color}11`, borderColor: `${color}33` }}
+              >
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                  style={{ backgroundColor: `${color}33`, color }}
+                >
+                  {getInitials(u.username)}
+                </div>
+                <span className="text-sm text-gray-200 truncate flex-1">{u.username}</span>
+                {u.isHost && (
+                  <div className="flex items-center gap-1 text-purple-400">
+                    <RiVipCrownLine size={12} />
+                    <span className="text-[10px] font-semibold">Host</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* copy link */}
+        <button
+          onClick={onCopyLink}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/[0.07] border border-white/10 text-sm text-gray-200 hover:bg-white/[0.12] transition-colors font-semibold"
+        >
+          <FiCopy size={14} />
+          {copied ? 'Link Copied!' : 'Copy Invite Link'}
+        </button>
       </div>
     </div>
   );
@@ -205,6 +290,7 @@ export default function Editor() {
   const [editingName,     setEditingName]     = useState(false);
   const [langOpen,        setLangOpen]        = useState(false);
   const [showLeaveConfirm,setShowLeaveConfirm]= useState(false);
+  const [showCollabSheet, setShowCollabSheet] = useState(false); // mobile collab info
 
   // collab state
   const [isCollabMode,     setIsCollabMode]     = useState(false);
@@ -234,19 +320,18 @@ export default function Editor() {
   const usersRef            = useRef([]);
   const languageRef         = useRef(language);
   const syncIntervalRef     = useRef(null);
-  const isHostRef           = useRef(false); // ✅ ref version so callbacks see latest value
+  const isHostRef           = useRef(false);
   const roomIdRef           = useRef(null);
-  const pendingYjsInitRef   = useRef(null);  // queued init when editor not yet mounted
+  const pendingYjsInitRef   = useRef(null);
 
   usePolling(execution.jobId, isPolling);
 
-  // keep refs in sync
   useEffect(() => { languageRef.current = language; },      [language]);
   useEffect(() => { usersRef.current    = collabUsers; },   [collabUsers]);
   useEffect(() => { isHostRef.current   = isHost; },        [isHost]);
   useEffect(() => { roomIdRef.current   = roomId; },        [roomId]);
 
-  // ── on mount ─────────────────────────────────────────────────────────────────
+  // ── on mount ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const saved = sessionStorage.getItem(ROOM_SESSION_KEY);
     if (saved) {
@@ -260,7 +345,6 @@ export default function Editor() {
           setCollabLang(session.language || 'cpp');
           setCollabFileName(session.fileName || 'Untitled');
           setIsCollabMode(true);
-          // still load file for host so Redux has the code
           if (session.isHost && fileId && fileId !== 'new') {
             loadFile(fileId);
           }
@@ -285,7 +369,6 @@ export default function Editor() {
     }
   }
 
-  // ── language change — individual mode only ────────────────────────────────
   function handleLanguageChange(newLang) {
     if (isCollabMode) return;
     dispatch(setLanguage(newLang));
@@ -294,7 +377,6 @@ export default function Editor() {
     setLangOpen(false);
   }
 
-  // ── run ───────────────────────────────────────────────────────────────────
   async function handleRun() {
     dispatch(resetExecution());
     setIsRunning(true);
@@ -306,15 +388,17 @@ export default function Editor() {
         stdin,
         fileId: fileId !== 'new' ? fileId : undefined,
       });
+      // console.log("This is data: ",data);
       dispatch(submitJob(data.jobId));
     } catch (err) {
-      console.error(err);
+      if(err.response?.status === 503){
+          toast.error('Code execution service is currently unavailable!');
+      }
     } finally {
       setIsRunning(false);
     }
   }
 
-  // ── save — host ───────────────────────────────────────────────────────────
   async function handleHostSave() {
     if (!fileId || fileId === 'new') return;
     setIsSaving(true);
@@ -329,7 +413,6 @@ export default function Editor() {
     }
   }
 
-  // ── save — individual ─────────────────────────────────────────────────────
   async function handleIndividualSave() {
     if (!fileId || fileId === 'new') return;
     setIsSaving(true);
@@ -343,7 +426,6 @@ export default function Editor() {
     }
   }
 
-  // ── save — joiner creates new file ────────────────────────────────────────
   async function handleJoinerSaveCopy(newFileName) {
     setIsSaving(true);
     try {
@@ -367,7 +449,6 @@ export default function Editor() {
     }
   }
 
-  // Ctrl+S
   useEffect(() => {
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -381,15 +462,12 @@ export default function Editor() {
     return () => window.removeEventListener('keydown', handler);
   }, [code, fileName, isCollabMode, isHost, collabLang]);
 
-  // ── start collab ──────────────────────────────────────────────────────────
   async function handleStartCollab() {
     const currentCode = editorRef.current?.getValue() || code || '';
     if (!currentCode.trim()) {
       alert('Please wait for the file to load before starting collaboration.');
       return;
     }
-    // ✅ Pre-save host's latest code to MongoDB so collab server
-    //    loads the up-to-date snapshot into the Y-doc for joiners.
     if (fileId && fileId !== 'new') {
       try {
         await updateFile(fileId, { code: currentCode, name: fileName });
@@ -422,7 +500,6 @@ export default function Editor() {
     setTimeout(() => setCopied(false), 1400);
   }
 
-  // ── host close room ───────────────────────────────────────────────────────
   function handleCloseRoom() {
     socketRef.current?.emit('close-room', { roomId });
     setShowCloseConfirm(false);
@@ -435,7 +512,6 @@ export default function Editor() {
     if (fileId && fileId !== 'new') loadFile(fileId);
   }
 
-  // ── joiner leave room ─────────────────────────────────────────────────────
   async function handleLeaveRoom(saveFile = false, newFileName = '') {
     try {
       if (saveFile && newFileName.trim()) {
@@ -455,7 +531,6 @@ export default function Editor() {
     }
   }
 
-  // ── Yjs init ──────────────────────────────────────────────────────────────
   const initYjs = (currentRoomId, initialCode = '') => {
     if (!editorRef.current || providerRef.current) return;
 
@@ -469,13 +544,10 @@ export default function Editor() {
     ydocRef.current     = ydoc;
     providerRef.current = provider;
 
-    // ✅ KEY FIX: wait for sync, then insert code if doc is empty
     provider.on('sync', (isSynced) => {
       if (!isSynced) return;
       if (ytext.length === 0 && initialCode) {
-        ydoc.transact(() => {
-          ytext.insert(0, initialCode);
-        });
+        ydoc.transact(() => { ytext.insert(0, initialCode); });
       }
     });
 
@@ -488,7 +560,6 @@ export default function Editor() {
     const color = getColorForIndex(idx >= 0 ? idx : 0);
     provider.awareness.setLocalStateField('user', { name: user?.name || 'User', color });
 
-    // ✅ debounced cursor — prevents recursive awareness calls
     let selTimer = null;
     const updateSelection = () => {
       if (selTimer) clearTimeout(selTimer);
@@ -504,16 +575,11 @@ export default function Editor() {
     updateSelection();
     selectionDisposable.current = editorRef.current.onDidChangeCursorSelection(updateSelection);
 
-    // ✅ rAF defers decoration update — prevents recursive deltaDecorations
     const onAwarenessChange = () => requestAnimationFrame(() => updateRemoteCursors());
     awarenessListener.current = onAwarenessChange;
     provider.awareness.on('change', onAwarenessChange);
-
-    // Server-side Yjs persistence (debounced 2s) handles autosave —
-    // no client-side polling required.
   };
 
-  // ── Yjs destroy ───────────────────────────────────────────────────────────
   const destroyCollab = () => {
     if (syncIntervalRef.current) {
       clearInterval(syncIntervalRef.current);
@@ -540,7 +606,6 @@ export default function Editor() {
     styleMapRef.current.clear();
   };
 
-  // ── remote cursors ────────────────────────────────────────────────────────
   const updateRemoteCursors = () => {
     const provider = providerRef.current;
     const editor   = editorRef.current;
@@ -590,7 +655,6 @@ export default function Editor() {
     decorationsRef.current = nextDeco;
   };
 
-  // ── Socket.IO ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isCollabMode || !roomId || !user) return;
 
@@ -604,7 +668,6 @@ export default function Editor() {
       socketIdRef.current = socket.id;
       setCollabStatus('connected');
 
-      // ✅ FIXED: send all required fields
       const currentCode = editorRef.current?.getValue() || code || '';
       socket.emit('join-room', {
         roomId,
@@ -614,7 +677,6 @@ export default function Editor() {
         language:        languageRef.current,
         fileName:        fileName,
         fileId:          fileId || null,
-        // only host sends code snapshot — joiner gets it from MongoDB via server
         code: isHostRef.current ? currentCode : '',
       });
     });
@@ -645,10 +707,6 @@ export default function Editor() {
         fileName: roomFileName || fileName,
       }));
 
-      // Server-side persistence loads the file code into the Y-doc.
-      // We always defer Yjs binding through pendingYjsInitRef so it
-      // runs once Monaco's model is ready (fixes joiner blank-editor
-      // race when room-joined arrives before onMount).
       pendingYjsInitRef.current = { roomId };
       if (editorRef.current && editorRef.current.getModel()) {
         pendingYjsInitRef.current = null;
@@ -692,9 +750,6 @@ export default function Editor() {
     socket.on('room-closed', ({ message }) => {
       sessionStorage.removeItem(ROOM_SESSION_KEY);
       setRoomClosedMsg(message || 'Host ended the session.');
-      // For non-host: offer save-as-new-file or discard before tearing down.
-      // Editor model still holds the last code after destroyCollab, so they
-      // can save a copy. Host just exits collab cleanly.
       const wasHost = isHostRef.current;
       destroyCollab();
       setIsCollabMode(false);
@@ -722,7 +777,6 @@ export default function Editor() {
   const handleEditorMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-    // Drain any queued Yjs init that arrived before mount (joiner race fix)
     const pending = pendingYjsInitRef.current;
     if (pending && pending.roomId) {
       pendingYjsInitRef.current = null;
@@ -734,65 +788,69 @@ export default function Editor() {
   const meta       = LANG_META[activeLang] || LANG_META.cpp;
 
   return (
-    <div className="flex h-screen bg-[#0a0a0f] text-gray-200 overflow-hidden font-mono">
+    <div className="flex h-[100dvh] bg-[#0a0a0f] text-gray-200 overflow-hidden font-mono">
       <div className="flex flex-col flex-1 min-w-0">
 
-        {/* Top Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-y-2 px-3 sm:px-4 py-2 md:h-12 md:py-0 bg-[#0d0d14] border-b border-gray-800 shrink-0">
+        {/* ── Top Bar ─────────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-2 px-2 sm:px-4 py-2 bg-[#0d0d14] border-b border-gray-800 shrink-0 min-h-[48px]">
 
-          {/* Left */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+          {/* ── LEFT ── */}
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
+            {/* Back */}
             <button
               onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 transition-all text-xs font-semibold"
+              className="flex items-center gap-1 px-2 py-1.5 rounded-md text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 transition-all text-xs font-semibold shrink-0"
             >
-              <IoArrowBackOutline size={15} /> Dashboard
+              <IoArrowBackOutline size={15} />
+              <span className="hidden sm:inline">Dashboard</span>
             </button>
 
-            <div className="w-px h-5 bg-gray-700" />
+            <div className="w-px h-5 bg-gray-700 shrink-0" />
 
-            {/* filename */}
-            {isCollabMode ? (
-              <span className="flex items-center gap-1.5 text-sm text-gray-100 px-1">
-                {collabFileName}
-                {isHost && <span className="text-[10px] text-purple-400 font-semibold ml-1">(host)</span>}
-              </span>
-            ) : editingName ? (
-              <input
-                autoFocus defaultValue={fileName}
-                onBlur={e => handleRename(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleRename(e.target.value)}
-                className="bg-gray-800 border border-gray-600 rounded-md text-gray-100 px-2 py-0.5 text-sm outline-none w-40"
-              />
-            ) : (
-              <span
-                onClick={() => setEditingName(true)}
-                className="flex items-center gap-1.5 text-sm text-gray-100 cursor-pointer hover:text-white px-1 rounded"
-              >
-                {fileName}
-                {!isSaved && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />}
-              </span>
-            )}
+            {/* Filename */}
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              {isCollabMode ? (
+                <span className="flex items-center gap-1.5 text-sm text-gray-100 px-1 truncate">
+                  <span className="truncate max-w-[100px] sm:max-w-[180px]">{collabFileName}</span>
+                  {isHost && <span className="text-[9px] text-purple-400 font-semibold shrink-0">(host)</span>}
+                </span>
+              ) : editingName ? (
+                <input
+                  autoFocus defaultValue={fileName}
+                  onBlur={e => handleRename(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleRename(e.target.value)}
+                  className="bg-gray-800 border border-gray-600 rounded-md text-gray-100 px-2 py-0.5 text-sm outline-none w-28 sm:w-40"
+                />
+              ) : (
+                <span
+                  onClick={() => setEditingName(true)}
+                  className="flex items-center gap-1.5 text-sm text-gray-100 cursor-pointer hover:text-white px-1 rounded truncate max-w-[100px] sm:max-w-[200px]"
+                >
+                  <span className="truncate">{fileName}</span>
+                  {!isSaved && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block shrink-0" />}
+                </span>
+              )}
+            </div>
 
-            {/* language */}
+            {/* Language selector — hidden on mobile when in collab + room info visible */}
             {isCollabMode ? (
-              <div className="flex items-center gap-2 px-3 py-1 bg-gray-800/50 border border-gray-700 rounded-md text-xs cursor-not-allowed opacity-70">
+              <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 bg-gray-800/50 border border-gray-700 rounded-md text-xs cursor-not-allowed opacity-70 shrink-0">
                 <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
                 <span className={`font-semibold ${meta.color}`}>{meta.label}</span>
                 <span className="text-gray-600 text-[10px]">locked</span>
               </div>
             ) : (
-              <div className="relative">
+              <div className="relative shrink-0">
                 <button
                   onClick={() => setLangOpen(v => !v)}
-                  className="flex items-center gap-2 px-3 py-1 bg-gray-800 border border-gray-700 rounded-md text-xs hover:border-gray-500 transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-800 border border-gray-700 rounded-md text-xs hover:border-gray-500 transition-colors"
                 >
                   <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
-                  <span className={`font-semibold ${meta.color}`}>{meta.label}</span>
+                  <span className={`font-semibold ${meta.color} hidden sm:inline`}>{meta.label}</span>
                   <FiChevronDown size={12} className="text-gray-500" />
                 </button>
                 {langOpen && (
-                  <div className="absolute top-9 left-0 z-50 bg-[#111118] border border-gray-700 rounded-lg shadow-xl py-1 w-40">
+                  <div className="absolute top-9 left-0 z-50 bg-[#111118] border border-gray-700 rounded-lg shadow-xl py-1 w-36">
                     {LANGUAGES.map(lang => {
                       const m = LANG_META[lang];
                       return (
@@ -812,11 +870,11 @@ export default function Editor() {
               </div>
             )}
 
-            {/* room info */}
+            {/* Collab room info strip — desktop only */}
             {isCollabMode && roomId && (
-              <div className="flex items-center gap-2 ml-1">
+              <div className="hidden lg:flex items-center gap-2 ml-1 shrink-0">
                 <div className="w-px h-5 bg-gray-700" />
-                <span className="text-[11px] text-gray-500 uppercase tracking-widest">Room</span>
+                <span className="text-[10px] text-gray-500 uppercase tracking-widest">Room</span>
                 <span className="font-mono text-xs text-gray-100">{roomId}</span>
                 <button
                   onClick={handleCopyLink}
@@ -841,38 +899,87 @@ export default function Editor() {
                       </div>
                     );
                   })}
-                  <span className="text-[11px] text-gray-500 ml-1">{collabUsers.length}/5</span>
+                  <span className="text-[10px] text-gray-500 ml-1">{collabUsers.length}/5</span>
+                </div>
+              </div>
+            )}
+
+            {/* Collab room info — tablet (md–lg) compact strip */}
+            {isCollabMode && roomId && (
+              <div className="hidden sm:flex lg:hidden items-center gap-2 ml-1 shrink-0">
+                <div className="w-px h-5 bg-gray-700" />
+                <span className="font-mono text-xs text-gray-400">{roomId}</span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${collabStatus === 'connected' ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+                <div className="flex items-center gap-1">
+                  {collabUsers.slice(0, 3).map((u, i) => {
+                    const color = getColorForIndex(i);
+                    return (
+                      <div
+                        key={u.socketId}
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold border"
+                        style={{ backgroundColor: `${color}22`, borderColor: `${color}55`, color }}
+                        title={u.username}
+                      >
+                        {getInitials(u.username)}
+                      </div>
+                    );
+                  })}
+                  {collabUsers.length > 3 && (
+                    <span className="text-[10px] text-gray-500">+{collabUsers.length - 3}</span>
+                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Right */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* ── RIGHT ── */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+
+            {/* Mobile collab info button */}
+            {isCollabMode && roomId && (
+              <button
+                onClick={() => setShowCollabSheet(true)}
+                className="sm:hidden flex items-center gap-1 px-2 py-1.5 rounded-md bg-purple-600/20 border border-purple-500/30 text-purple-400 text-xs font-semibold"
+              >
+                <FiUsers size={13} />
+                <span>{collabUsers.length}</span>
+              </button>
+            )}
+
+            {/* Start collab */}
             {isAuthenticated && !isCollabMode && (
               <button
                 onClick={handleStartCollab}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all"
               >
-                <FiUsers size={13} /> Collaborate
+                <FiUsers size={13} />
+                <span className="hidden sm:inline">Collaborate</span>
               </button>
             )}
+
+            {/* Close Room (host) */}
             {isCollabMode && isHost && (
               <button
                 onClick={() => setShowCloseConfirm(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600/20 border border-red-500/30 text-red-400 text-xs font-bold hover:bg-red-600/30 transition-all"
+                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-md bg-red-600/20 border border-red-500/30 text-red-400 text-xs font-bold hover:bg-red-600/30 transition-all"
               >
-                <FiX size={13} /> Close Room
+                <FiX size={13} />
+                <span className="hidden sm:inline">Close Room</span>
               </button>
             )}
+
+            {/* Leave Room (joiner) */}
             {isCollabMode && !isHost && (
               <button
                 onClick={() => setShowLeaveConfirm(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-gray-700 text-gray-300 text-xs font-bold hover:bg-gray-600 transition-all"
+                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-md bg-gray-700 text-gray-300 text-xs font-bold hover:bg-gray-600 transition-all"
               >
-                <FiX size={13} /> Leave Room
+                <FiX size={13} />
+                <span className="hidden sm:inline">Leave</span>
               </button>
             )}
+
+            {/* Save */}
             <button
               onClick={() => {
                 if (!isCollabMode)       handleIndividualSave();
@@ -880,38 +987,45 @@ export default function Editor() {
                 else                     setShowSaveCopy(true);
               }}
               disabled={isSaving || (!isCollabMode && isSaved)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-700 text-gray-400 text-xs font-semibold hover:border-gray-500 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-md border border-gray-700 text-gray-400 text-xs font-semibold hover:border-gray-500 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               <FiSave size={14} />
-              {isSaving ? 'Saving...' : isCollabMode && !isHost ? 'Save Copy' : 'Save'}
+              <span className="hidden sm:inline">
+                {isSaving ? 'Saving...' : isCollabMode && !isHost ? 'Save Copy' : 'Save'}
+              </span>
             </button>
+
+            {/* Run */}
             <button
               onClick={handleRun}
               disabled={isRunning || isPolling}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-green-600 hover:bg-green-500 text-white text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-green-900/30"
+              className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-1.5 rounded-md bg-green-600 hover:bg-green-500 text-white text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-green-900/30"
             >
-              <FiPlay size={13} fill="white" />
-              {isRunning || isPolling ? 'Running...' : 'Run'}
+              <FiPlay size={13} fill="white" />Run
+              <span className="hidden xs:inline">
+                {isRunning || isPolling ? 'Running...' : 'Run'}
+              </span>
             </button>
           </div>
         </div>
 
-        {/* room closed banner */}
+        {/* Room closed banner */}
         {roomClosedMsg && (
-          <div className="flex items-center justify-between px-4 py-2 bg-red-500/10 border-b border-red-500/20 text-red-400 text-xs">
-            <span>{roomClosedMsg}</span>
-            <button onClick={() => setRoomClosedMsg('')}><FiX size={14} /></button>
+          <div className="flex items-center justify-between px-3 py-2 bg-red-500/10 border-b border-red-500/20 text-red-400 text-xs">
+            <span className="truncate">{roomClosedMsg}</span>
+            <button onClick={() => setRoomClosedMsg('')} className="ml-2 shrink-0"><FiX size={14} /></button>
           </div>
         )}
 
-        {/* Body — stacks vertically on mobile, side-by-side on md+ */}
+        {/* ── Body ──────────────────────────────────────────────────────────── */}
+        {/* Mobile: editor top, output bottom stacked. md+: side by side. */}
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-          <div className="flex-1 min-h-[40vh] md:min-h-0 overflow-hidden">
+
+          {/* Editor */}
+          <div className="flex-1 overflow-hidden" style={{ minHeight: '45vh' }}>
             <MonacoEditor
               height="100%"
               language={MONACO_LANG_MAP[activeLang]}
-              // ✅ CRITICAL: undefined in collab mode so Yjs controls content
-              // value prop in collab mode fights with MonacoBinding and causes blank editor
               value={isCollabMode ? undefined : code}
               onChange={isCollabMode ? undefined : (val) => dispatch(setCode(val || ''))}
               theme="vs-dark"
@@ -924,13 +1038,15 @@ export default function Editor() {
                 padding:              { top: 16 },
                 lineNumbersMinChars:  3,
                 renderLineHighlight:  'all',
+                wordWrap:             'off',
               }}
               onMount={handleEditorMount}
             />
           </div>
 
-          <div className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-l border-gray-800 shrink-0 h-64 md:h-auto">
-            <div className="flex flex-col border-b border-gray-800" style={{ height: '40%' }}>
+          {/* Stdin + Output panel */}
+          <div className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-l border-gray-800 shrink-0 h-56 sm:h-64 md:h-auto">
+            <div className="flex flex-col border-b border-gray-800 h-2/5">
               <div className="flex items-center gap-2 px-3 py-1.5 bg-[#0d0d14] border-b border-gray-800 shrink-0">
                 <VscTerminal size={13} className="text-gray-500" />
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">stdin</span>
@@ -948,12 +1064,15 @@ export default function Editor() {
         </div>
       </div>
 
+      {/* Backdrop for lang dropdown */}
       {langOpen && <div className="fixed inset-0 z-40" onClick={() => setLangOpen(false)} />}
+
+      {/* ── Modals ──────────────────────────────────────────────────────────── */}
 
       {/* Close Room modal */}
       {showCloseConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-[#0d0d18] border border-white/10 rounded-2xl shadow-2xl p-6">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4">
+          <div className="w-full sm:max-w-sm bg-[#0d0d18] border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 sm:p-6 pb-8 sm:pb-6">
             <h3 className="text-base font-bold text-white mb-2">Close Room?</h3>
             <p className="text-sm text-gray-400 mb-6">This will end the session for all participants immediately.</p>
             <div className="flex gap-3">
@@ -984,6 +1103,21 @@ export default function Editor() {
           onClose={() => setShowLeaveConfirm(false)}
           onLeaveWithoutSaving={() => { setShowLeaveConfirm(false); handleLeaveRoom(false); }}
           onSaveAndLeave={async (name) => { setShowLeaveConfirm(false); await handleLeaveRoom(true, name); }}
+        />
+      )}
+
+      {/* Mobile collab info bottom sheet */}
+      {showCollabSheet && (
+        <CollabInfoSheet
+          roomId={roomId}
+          collabUsers={collabUsers}
+          collabStatus={collabStatus}
+          collabFileName={collabFileName}
+          collabLang={collabLang}
+          isHost={isHost}
+          copied={copied}
+          onCopyLink={handleCopyLink}
+          onClose={() => setShowCollabSheet(false)}
         />
       )}
     </div>
