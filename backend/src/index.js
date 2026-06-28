@@ -14,9 +14,7 @@ const PORT = process.env.PORT;
 
 
 // middleware
-app.use(cors({
-  origin: "*"
-}));
+app.use(cors({origin: "*"}));
 
 app.use(express.json({ limit: '1mb' }));
 app.use(passport.initialize());
