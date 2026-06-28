@@ -1032,7 +1032,7 @@ export default function Home() {
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
 
-  const login = () => { window.location.href = `${BACKEND_URL}/auth/google` }
+  const login = () => { window.location.href = `${import.meta.env.VITE_BACKEND_URL}/api/v1/auth/google`; }
 
   return (
     <>
