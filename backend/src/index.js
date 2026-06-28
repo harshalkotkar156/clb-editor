@@ -10,7 +10,8 @@ import executeRouter from "./routes/execute.js";
 import filesRouter from "./routes/filesRoutes.js";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
+
 
 // middleware
 app.use(cors({

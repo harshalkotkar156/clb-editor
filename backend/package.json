@@ -8,7 +8,7 @@
     "worker": "node src/workers/codeWorker.js",
     "start:collab": "node src/collaborationServer.js",
     "dev:collab": "nodemon src/collaborationServer.js",
-    "start": "concurrently \"npm run start:main \" \"npm run start:collab\"",
+    "start": "bash start.sh",
     "dev": "concurrently \"npm run dev:main \" \"npm run dev:collab\""
   },
   "type": "module",
