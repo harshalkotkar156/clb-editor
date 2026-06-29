@@ -31,7 +31,7 @@ import { RiVipCrownLine } from 'react-icons/ri';
 // ── constants ─────────────────────────────────────────────────────────────────
 
 const WS_URL     = import.meta.env.VITE_COLLAB_WS_URL     || 'ws://localhost:3001/yjs';
-const SOCKET_URL = import.meta.env.VITE_COLLAB_HTTP_URL    || 'http://localhost:3001';
+const SOCKET_URL = import.meta.env.VITE_BACKEND_URL    || 'http://localhost:3001';
 const COLOR_PALETTE    = ['#F87171', '#34D399', '#60A5FA', '#FBBF24', '#A78BFA'];
 const ROOM_SESSION_KEY = import.meta.env.VITE_ROOM_SESSION_KEY;
 
@@ -535,7 +535,12 @@ export default function Editor() {
     if (!editorRef.current || providerRef.current) return;
 
     const ydoc     = new Y.Doc();
-    const provider = new WebsocketProvider(WS_URL, currentRoomId, ydoc, { connect: true });
+    const yjsUrl = import.meta.env.VITE_BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+    const provider = new WebsocketProvider(
+      yjsUrl,        // wss://codesync-xxx.azurewebsites.net
+      `yjs/${roomId}`,
+      ydoc, { connect: true });
+    // const provider = new WebsocketProvider(WS_URL, currentRoomId, ydoc, { connect: true });
     const ytext    = ydoc.getText('monaco');
     const model    = editorRef.current.getModel();
 
@@ -664,12 +669,10 @@ export default function Editor() {
     // });
 
     const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+  transports: ['websocket', 'polling'],
+  withCredentials: true,
+  // ✅ NO path needed — uses default /socket.io
+});
     socketRef.current = socket;
 
     socket.on('connect', () => {
