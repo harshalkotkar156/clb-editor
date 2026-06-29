@@ -751,6 +751,7 @@ import React, { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+console.log("This is bacekndurl : ",BACKEND_URL);
 
 // ─── Injected keyframes ───────────────────────────────────────────────────
 const KF = `
@@ -1031,8 +1032,8 @@ export default function Home() {
   }, [])
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
-
-  const login = () => { window.location.href = `${import.meta.env.VITE_BACKEND_URL}/api/v1/auth/google`; }
+  
+  const login = () => { window.location.href = `${BACKEND_URL}/api/v1/auth/google`; }
 
   return (
     <>

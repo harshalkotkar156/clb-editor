@@ -2,7 +2,7 @@ import passport from 'passport';
 import jwt from 'jsonwebtoken';
 import '../config/passport.js'; // registers Google strategy
 
-
+const CLIENT_URL = process.env.CLIENT_URL;
 // 🔹 1. Redirect user to Google login page
 export const googleAuth = passport.authenticate('google', {
   scope: ['profile', 'email'],
@@ -14,7 +14,7 @@ export const googleAuth = passport.authenticate('google', {
 export const googleAuthCallback = [
   passport.authenticate('google', {
     session: false,
-    failureRedirect: `${process.env.CLIENT_URL}/?error=oauth_failed`
+    failureRedirect: `${CLIENT_URL}/?error=oauth_failed`
   }),
   (req, res) => {
     // req.user comes from passport (Google strategy)
@@ -31,7 +31,8 @@ export const googleAuthCallback = [
     );
 
     // redirect user to frontend auth callback with token
-    res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
+    const redirectUrl = `${CLIENT_URL}/auth/callback?token=${token}`;
+    res.redirect(redirectUrl);
   }
 ];
 

@@ -34,6 +34,6 @@ export const getExecutions = (id)       => api.get(`/files/${id}/executions`);
 
 // ── Execution ──────────────────────────────────────
 export const executeCode   = (data)     => api.post('/code/execute', data);
-export const getJobStatus  = (jobId)    => api.get(`code/status/${jobId}`);
+export const getJobStatus  = (jobId)    => api.get(`/code/status/${jobId}`);
 
 export default api;
