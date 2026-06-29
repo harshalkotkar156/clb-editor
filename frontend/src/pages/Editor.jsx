@@ -30,8 +30,8 @@ import { RiVipCrownLine } from 'react-icons/ri';
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-const WS_URL           = import.meta.env.VITE_COLLAB_WS_URL;//   || 'ws://localhost:3001/yjs';
-const SOCKET_URL       = import.meta.env.VITE_COLLAB_HTTP_URL ;//|| 'http://localhost:3001';
+const WS_URL     = import.meta.env.VITE_COLLAB_WS_URL     || 'ws://localhost:3001/yjs';
+const SOCKET_URL = import.meta.env.VITE_COLLAB_HTTP_URL    || 'http://localhost:3001';
 const COLOR_PALETTE    = ['#F87171', '#34D399', '#60A5FA', '#FBBF24', '#A78BFA'];
 const ROOM_SESSION_KEY = import.meta.env.VITE_ROOM_SESSION_KEY;
 
@@ -658,9 +658,17 @@ export default function Editor() {
   useEffect(() => {
     if (!isCollabMode || !roomId || !user) return;
 
+    // const socket = io(SOCKET_URL, {
+    //   transports: ['polling', 'websocket'],
+    //   withCredentials: true,
+    // });
+
     const socket = io(SOCKET_URL, {
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
     socketRef.current = socket;
 
