@@ -30,10 +30,10 @@ import { RiVipCrownLine } from 'react-icons/ri';
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-const WS_URL     = import.meta.env.VITE_COLLAB_WS_URL     || 'ws://localhost:3001/yjs';
-const SOCKET_URL = import.meta.env.VITE_BACKEND_URL    || 'http://localhost:3001';
+const WS_URL           = import.meta.env.VITE_COLLAB_WS_URL     || '';
+const SOCKET_URL       = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080').replace(/\/+$/, '');
 const COLOR_PALETTE    = ['#F87171', '#34D399', '#60A5FA', '#FBBF24', '#A78BFA'];
-const ROOM_SESSION_KEY = import.meta.env.VITE_ROOM_SESSION_KEY;
+const ROOM_SESSION_KEY = import.meta.env.VITE_ROOM_SESSION_KEY || 'collab_session';
 
 const DEFAULT_CODE = {
   cpp:        `#include<iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}`,
@@ -186,7 +186,7 @@ function LeaveRoomModal({ language, defaultName, onSaveAndLeave, onLeaveWithoutS
 }
 
 // ── CollabInfoSheet (mobile bottom sheet for room details) ────────────────────
-function CollabInfoSheet({ roomId, collabUsers, collabStatus, collabFileName, collabLang, isHost, copied, onCopyLink, onClose }) {
+function CollabInfoSheet({ roomId, collabUsers, collabStatus, collabFileName, collabLang, copied, onCopyLink, onClose }) {
   const meta = LANG_META[collabLang] || LANG_META.cpp;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -270,7 +270,8 @@ function CollabInfoSheet({ roomId, collabUsers, collabStatus, collabFileName, co
 
 // ── main component ────────────────────────────────────────────────────────────
 export default function Editor() {
-  const { fileId } = useParams();
+  const { fileId: routeFileId, roomId: routeRoomId } = useParams();
+  const fileId = routeFileId;
   const dispatch   = useDispatch();
   const navigate   = useNavigate();
 
@@ -337,7 +338,7 @@ export default function Editor() {
     if (saved) {
       try {
         const session = JSON.parse(saved);
-        if (session.roomId && (session.fileId === fileId || !session.isHost)) {
+        if (session.roomId && (session.fileId === fileId || !session.isHost || routeRoomId)) {
           setRoomId(session.roomId);
           setIsHost(session.isHost);
           isHostRef.current = session.isHost;
@@ -350,14 +351,26 @@ export default function Editor() {
           }
           return;
         }
-      } catch {}
+      } catch { /* Ignore invalid persisted room state. */ }
     }
+
+    // Check if URL is a collab room route e.g. /editor/collab-:roomId
+    if (routeRoomId) {
+      const room = routeRoomId.toUpperCase();
+      setRoomId(room);
+      roomIdRef.current = room;
+      setIsHost(false);
+      isHostRef.current = false;
+      setIsCollabMode(true);
+      return;
+    }
+
     if (fileId && fileId !== 'new') {
       loadFile(fileId);
     } else {
       dispatch(setCode(DEFAULT_CODE[language] || ''));
     }
-  }, [fileId]);
+  }, [fileId, routeRoomId]);
 
   async function loadFile(id) {
     try {
@@ -382,17 +395,20 @@ export default function Editor() {
     setIsRunning(true);
     try {
       const currentCode = editorRef.current?.getValue() || code;
+      const validFileId = fileId && fileId !== 'new' && !fileId.startsWith('collab-') ? fileId : undefined;
       const { data } = await executeCode({
         language: isCollabMode ? collabLang : language,
         code:     currentCode,
         stdin,
-        fileId: fileId !== 'new' ? fileId : undefined,
+        fileId:   validFileId,
       });
-      // console.log("This is data: ",data);
       dispatch(submitJob(data.jobId));
     } catch (err) {
-      if(err.response?.status === 503){
-          toast.error('Code execution service is currently unavailable!');
+      if (err.response?.status === 503) {
+        toast.error('Code execution service is currently unavailable!');
+      } else {
+        const errMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Execution request failed';
+        toast.error(errMsg);
       }
     } finally {
       setIsRunning(false);
@@ -534,13 +550,25 @@ export default function Editor() {
   const initYjs = (currentRoomId, initialCode = '') => {
     if (!editorRef.current || providerRef.current) return;
 
-    const ydoc     = new Y.Doc();
-    const yjsUrl = import.meta.env.VITE_BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+    const targetRoom = currentRoomId || roomIdRef.current || roomId;
+    if (!targetRoom) return;
+
+    const ydoc = new Y.Doc();
+
+    // Determine normalized WebSocket base URL
+    let wsBase = WS_URL;
+    if (!wsBase) {
+      const backend = import.meta.env.VITE_BACKEND_URL || window.location.origin;
+      wsBase = backend.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://');
+    }
+    wsBase = wsBase.replace(/\/yjs\/?$/i, '').replace(/\/+$/, '');
+
     const provider = new WebsocketProvider(
-      yjsUrl,        // wss://codesync-xxx.azurewebsites.net
-      `yjs/${roomId}`,
-      ydoc, { connect: true });
-    // const provider = new WebsocketProvider(WS_URL, currentRoomId, ydoc, { connect: true });
+      wsBase,
+      `yjs/${targetRoom}`,
+      ydoc,
+      { connect: true }
+    );
     const ytext    = ydoc.getText('monaco');
     const model    = editorRef.current.getModel();
 
@@ -603,7 +631,7 @@ export default function Editor() {
     const editor = editorRef.current;
     if (editor) {
       decorationsRef.current.forEach((ids) => {
-        try { editor.deltaDecorations(ids, []); } catch {}
+        try { editor.deltaDecorations(ids, []); } catch { /* Monaco may already be disposed. */ }
       });
     }
     decorationsRef.current.clear();
@@ -648,12 +676,12 @@ export default function Editor() {
           ],
         );
         nextDeco.set(clientId, ids);
-      } catch {}
+      } catch { /* Ignore invalid remote cursor selections. */ }
     });
 
     decorationsRef.current.forEach((ids, clientId) => {
       if (!nextDeco.has(clientId)) {
-        try { editor.deltaDecorations(ids, []); } catch {}
+        try { editor.deltaDecorations(ids, []); } catch { /* Monaco may already be disposed. */ }
         removeCursorStyle(styleMapRef.current, clientId);
       }
     });
@@ -696,7 +724,7 @@ export default function Editor() {
 
     socket.on('room-joined', ({
       users, language: roomLang, isHost: hostFlag,
-      fileName: roomFileName, code: initialCode,
+      fileName: roomFileName,
     }) => {
       setCollabUsers(users);
       usersRef.current = users;
@@ -721,7 +749,7 @@ export default function Editor() {
       pendingYjsInitRef.current = { roomId };
       if (editorRef.current && editorRef.current.getModel()) {
         pendingYjsInitRef.current = null;
-        initYjs(roomId);
+        initYjs(roomId, isHostRef.current ? editorRef.current.getValue() : '');
       }
     });
 
@@ -791,7 +819,7 @@ export default function Editor() {
     const pending = pendingYjsInitRef.current;
     if (pending && pending.roomId) {
       pendingYjsInitRef.current = null;
-      initYjs(pending.roomId);
+      initYjs(pending.roomId, isHostRef.current ? editor.getValue() || code : '');
     }
   };
 

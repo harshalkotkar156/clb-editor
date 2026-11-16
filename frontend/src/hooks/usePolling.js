@@ -23,7 +23,7 @@ export function usePolling(jobId, isPolling) {
         clearInterval(intervalRef.current);
         dispatch(setResult(data));
 
-      } catch (err) {
+      } catch {
         clearInterval(intervalRef.current);
         dispatch(setResult({
           status:   'failed',

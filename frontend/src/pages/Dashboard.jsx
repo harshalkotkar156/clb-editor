@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createElement, useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { getFiles, createFile, deleteFile } from '../services/api';
@@ -164,7 +164,7 @@ function CreateModal({ onClose, onCreate }) {
                   : 'border-white/[0.07] hover:border-white/20 bg-transparent'
               }`}
             >
-              <Icon size={16} className={lang === key ? color : 'text-gray-600'} />
+              {createElement(Icon, { size: 16, className: lang === key ? color : 'text-gray-600' })}
               <span className={`text-sm font-semibold ${lang === key ? color : 'text-gray-500'}`}>{label}</span>
               {lang === key && <span className="ml-auto text-cyan-400 text-xs">✓</span>}
             </button>
@@ -201,15 +201,18 @@ export default function Dashboard() {
   const user      = useSelector(selectUser);
   const [showModal, setShowModal] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
-  useEffect(() => { fetchFiles(); }, []);
-
-  async function fetchFiles() {
+  useEffect(() => {
+    let active = true;
     dispatch(setLoading(true));
-    try {
-      const { data } = await getFiles();
-      dispatch(setFiles(data));
-    } catch (err) { console.error(err); }
-  }
+    getFiles()
+      .then(({ data }) => { if (active) dispatch(setFiles(data)); })
+      .catch((err) => {
+        if (!active) return;
+        console.error(err);
+        dispatch(setLoading(false));
+      });
+    return () => { active = false; };
+  }, [dispatch]);
 
   async function handleCreate(payload) {
     try {
@@ -299,7 +302,7 @@ export default function Dashboard() {
             { label: 'JS Files',     value: langCounts.javascript,  icon: SiJavascript, color: 'text-yellow-400', glow: 'shadow-yellow-500/10' },
           ].map(({ label, value, icon: Icon, color, glow }) => (
             <div key={label} className={`bg-[#0d0d14] border border-white/[0.07] rounded-xl p-4 shadow-lg ${glow}`}>
-              <div className={`${color} mb-3`}><Icon size={18} /></div>
+              <div className={`${color} mb-3`}>{createElement(Icon, { size: 18 })}</div>
               <div className="text-2xl font-bold text-white">{value}</div>
               <div className="text-xs text-gray-500 mt-0.5">{label}</div>
             </div>

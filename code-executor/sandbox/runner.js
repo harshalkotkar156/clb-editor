@@ -54,41 +54,60 @@ export async function runCode({ language, code, stdin = '' }) {
     throw new Error(`Unsupported language: ${language}`);
   }
 
+  let filename = config.filename;
+  let compileCmd = config.compileCmd;
+  let runCmd = config.runCmd;
+
+  // Support LeetCode Java classes (e.g. public class Solution / class Solution)
+  if (language === 'java') {
+    const classMatch = code.match(/public\s+class\s+([A-Za-z0-9_]+)/) || code.match(/class\s+([A-Za-z0-9_]+)/);
+    const className = classMatch ? classMatch[1] : 'Main';
+    filename = `${className}.java`;
+    compileCmd = `javac ${className}.java`;
+    runCmd = `java ${className}`;
+  }
+
   const jobDir = path.join(os.tmpdir(), `job-${uuidv4()}`);
   await fs.mkdir(jobDir, { recursive: true });
 
-  const codeFile  = path.join(jobDir, config.filename);
+  const codeFile  = path.join(jobDir, filename);
   const stdinFile = path.join(jobDir, 'input.txt');
+
+  let startTime = Date.now();
 
   try {
     await fs.writeFile(codeFile, code, 'utf8');
     await fs.writeFile(stdinFile, stdin, 'utf8');
 
-    const startTime = Date.now();
+    startTime = Date.now();
 
     let dockerCmd;
-    if (config.compileCmd) {
+    if (compileCmd) {
       // compiled language — compile first, then run
       dockerCmd = `docker run --rm \
         --network none \
+        --cap-drop=ALL \
+        --security-opt=no-new-privileges \
         --memory="${config.memory}" \
         --cpus="0.5" \
         --ulimit nproc=50 \
         -v "${jobDir}:/code" \
         --workdir /code \
         ${config.image} \
-        sh -c "${config.compileCmd} && timeout ${MAX_TIME} ${config.runCmd} < input.txt"`;
+        sh -c "${compileCmd} && timeout ${MAX_TIME} ${runCmd} < input.txt"`;
     } else {
       // interpreted language — run directly
       dockerCmd = `docker run --rm \
         --network none \
+        --cap-drop=ALL \
+        --security-opt=no-new-privileges \
         --memory="${config.memory}" \
         --cpus="0.5" \
         --ulimit nproc=50 \
         -v "${jobDir}:/code" \
         --workdir /code \
         ${config.image} \
-        sh -c "timeout ${MAX_TIME} ${config.runCmd} < input.txt"`;
+        sh -c "timeout ${MAX_TIME} ${runCmd} < input.txt"`;
     }
 
     const { stdout, stderr } = await execAsync(dockerCmd, {
@@ -106,9 +125,19 @@ export async function runCode({ language, code, stdin = '' }) {
     };
 
   } catch (err) {
-    const executionTime = Date.now() - (err.startTime || Date.now());
+    const executionTime = Math.max(0, Date.now() - startTime);
 
-    if (err.killed || err.signal === 'SIGTERM') {
+    if (err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+      return {
+        stdout: err.stdout || '',
+        stderr: 'Output Limit Exceeded — your program generated too much output.',
+        exitCode: 1,
+        executionTime
+      };
+    }
+
+    const isTimeout = err.killed || err.signal === 'SIGTERM' || err.code === 124;
+    if (isTimeout) {
       return {
         stdout: err.stdout || '',
         stderr: 'Time Limit Exceeded — your code ran longer than allowed.',
@@ -117,14 +146,16 @@ export async function runCode({ language, code, stdin = '' }) {
       };
     }
 
+    const numericExitCode = typeof err.code === 'number' ? err.code : 1;
+
     return {
       stdout: err.stdout || '',
       stderr: err.stderr || err.message,
-      exitCode: err.code || 1,
+      exitCode: numericExitCode,
       executionTime
     };
 
   } finally {
-    await fs.rm(jobDir, { recursive: true, force: true });
+    await fs.rm(jobDir, { recursive: true, force: true }).catch(() => {});
   }
 }

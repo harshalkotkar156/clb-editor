@@ -747,11 +747,10 @@
 
 
 import { FaHeart } from "react-icons/fa";
-import React, { useEffect, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import { useSelector } from 'react-redux'
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
-console.log("This is bacekndurl : ",BACKEND_URL);
+import { useState, useEffect } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080').replace(/\/+$/, '');
 
 // ─── Injected keyframes ───────────────────────────────────────────────────
 const KF = `
@@ -1022,8 +1021,14 @@ function OutputDemo() {
 // ─── Main ─────────────────────────────────────────────────────────────────
 export default function Home() {
   const { isAuthenticated } = useSelector(s => s.auth)
-  const navigate = useNavigate()
+  const location = useLocation()
   const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    if (location.state?.redirectAfterLogin) {
+      sessionStorage.setItem('post_login_redirect', location.state.redirectAfterLogin);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 10)
@@ -1033,7 +1038,12 @@ export default function Home() {
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
   
-  const login = () => { window.location.href = `${BACKEND_URL}/api/v1/auth/google`; }
+  const login = () => {
+    if (location.state?.redirectAfterLogin) {
+      sessionStorage.setItem('post_login_redirect', location.state.redirectAfterLogin);
+    }
+    window.location.href = `${BACKEND_URL}/api/v1/auth/google`;
+  }
 
   return (
     <>

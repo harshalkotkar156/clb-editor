@@ -1,7 +1,7 @@
 import { Loader, CheckCircle, XCircle, Clock } from 'lucide-react';
 
-export default function OutputPanel({ execution, isPolling }) {
-  const { status, stdout, stderr, exitCode, executionTime } = execution;
+export default function OutputPanel({ execution }) {
+  const { status, stdout, stderr, executionTime } = execution;
 
   function renderStatus() {
     if (!status)               return null;

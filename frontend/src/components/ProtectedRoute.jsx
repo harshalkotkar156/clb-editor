@@ -19,10 +19,20 @@
 
 
 import { useSelector } from 'react-redux';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { selectIsAuthenticated } from '../features/auth/authSlice';
 
 export default function ProtectedRoute({ children }) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
-  return isAuthenticated ? children : <Navigate to="/" replace />;
+  const location = useLocation();
+
+  return isAuthenticated ? (
+    children
+  ) : (
+    <Navigate
+      to="/"
+      state={{ redirectAfterLogin: location.pathname + location.search }}
+      replace
+    />
+  );
 }

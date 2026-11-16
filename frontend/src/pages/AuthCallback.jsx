@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import {jwtDecode} from 'jwt-decode'; 
+import { jwtDecode } from 'jwt-decode';
 
-import { loginSuccess } from '../store/slices/authSlice';
+import { loginSuccess } from '../features/auth/authSlice';
 
 const AuthCallback = () => {
   const [searchParams] = useSearchParams();
@@ -21,19 +21,32 @@ const AuthCallback = () => {
     }
 
     if (token) {
-      // decode the JWT to get user info (no need for API call)
-      const user = jwtDecode(token);
+      try {
+        // decode the JWT to get user info
+        const user = jwtDecode(token);
 
-      // store in Redux + localStorage
-      dispatch(loginSuccess({ token, user }));
+        // store in Redux + localStorage
+        dispatch(loginSuccess({ token, user }));
 
-      // clean the token from URL and stay on dashboard
-      navigate('/dashboard', { replace: true });
+        // Check if there was an intended redirect (e.g. invited room)
+        const postLoginRedirect = sessionStorage.getItem('post_login_redirect');
+        if (postLoginRedirect) {
+          sessionStorage.removeItem('post_login_redirect');
+          navigate(postLoginRedirect, { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
+      } catch (err) {
+        console.error('Invalid token in auth callback:', err);
+        navigate('/', { replace: true });
+      }
+    } else {
+      navigate('/', { replace: true });
     }
-  }, []);
+  }, [searchParams, dispatch, navigate]);
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '100px' }}>
+    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-gray-400 text-sm">
       <p>Logging you in...</p>
     </div>
   );

@@ -1,11 +1,11 @@
 
 
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { selectIsAuthenticated } from '../features/auth/authSlice';
 
-const ROOM_SESSION_KEY = import.meta.env.VITE_ROOM_SESSION_KEY;
+const ROOM_SESSION_KEY = import.meta.env.VITE_ROOM_SESSION_KEY || 'collab_session';
 
 export default function RoomPage() {
   const { roomId } = useParams();

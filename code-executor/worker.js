@@ -21,14 +21,16 @@ const worker = new Worker('code-execution', async (job) => {
 
   const result = await runCode({ language, code, stdin });
 
+  const numericExitCode = typeof result.exitCode === 'number' ? result.exitCode : 1;
+
   await Execution.findOneAndUpdate(
     { jobId },
     {
-      status: result.exitCode === 0 ? 'completed' : 'failed',
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-      executionTime: result.executionTime,
+      status: numericExitCode === 0 ? 'completed' : 'failed',
+      stdout: result.stdout || '',
+      stderr: result.stderr || '',
+      exitCode: numericExitCode,
+      executionTime: result.executionTime || 0,
       completedAt: new Date()
     }
   );
@@ -46,15 +48,18 @@ worker.on('completed', (job) => {
 });
 
 worker.on('failed', (job, err) => {
-  console.error(`[Worker] Job ${job.id} failed:`, err.message);
-  Execution.findOneAndUpdate(
-    { jobId: job.data.jobId },
-    {
-      status: 'failed',
-      stderr: err.message,
-      completedAt: new Date()
-    }
-  ).catch(console.error);
+  console.error(`[Worker] Job ${job?.id} failed:`, err.message);
+  if (job?.data?.jobId) {
+    Execution.findOneAndUpdate(
+      { jobId: job.data.jobId },
+      {
+        status: 'failed',
+        stderr: err.message || 'Worker execution failed',
+        exitCode: 1,
+        completedAt: new Date()
+      }
+    ).catch(console.error);
+  }
 });
 
 worker.on('error', (err) => {
