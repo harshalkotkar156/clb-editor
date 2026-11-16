@@ -9,20 +9,38 @@ passport.use(new GoogleStrategy({
 },
 async (accessToken, refreshToken, profile, done) => {
   try {
-    // check if user already exists in DB
-    let user = await User.findOne({ googleId: profile.id });
+    const email = profile.emails?.[0]?.value;
+    const avatar = profile.photos?.[0]?.value || '';
+    const name = profile.displayName || email?.split('@')[0] || 'User';
+
+    if (!email) {
+      return done(new Error('Google account has no associated email address'), null);
+    }
+
+    // check if user already exists by googleId or email
+    let user = await User.findOne({ $or: [{ googleId: profile.id }, { email }] });
 
     if (user) {
-      // existing user — just return them
+      // update googleId or avatar if missing
+      let modified = false;
+      if (!user.googleId) {
+        user.googleId = profile.id;
+        modified = true;
+      }
+      if (!user.avatar && avatar) {
+        user.avatar = avatar;
+        modified = true;
+      }
+      if (modified) await user.save();
       return done(null, user);
     }
 
     // new user — create them
     user = await User.create({
       googleId: profile.id,
-      name:     profile.displayName,
-      email:    profile.emails[0].value,
-      avatar:   profile.photos[0].value
+      name,
+      email,
+      avatar
     });
 
     return done(null, user);

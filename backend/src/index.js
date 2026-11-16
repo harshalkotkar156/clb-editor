@@ -1,55 +1,3 @@
-// import 'dotenv/config';
-// import express from 'express';
-// import cors from 'cors';
-// import connectDB from './config/db.js';
-// import passport from 'passport';
-// import authRouter from './routes/auth.js';
-// import executeRouter from "./routes/execute.js";
-// import filesRouter from "./routes/filesRoutes.js";
-
-// const app = express();
-
-// // ✅ Fix PORT — fallback to 3000 locally
-// const PORT = process.env.PORT || 3000;
-
-// const CLIENT_URL = process.env.CLIENT_URL;
-
-// app.use(cors({
-//   origin: CLIENT_URL,
-//   credentials: true,
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization']
-// }));
-
-// app.use(express.json({ limit: '1mb' }));
-// app.use(passport.initialize());
-
-// await connectDB();
-
-// app.use('/api/v1/auth', authRouter); 
-// app.use('/api/v1/code', executeRouter);
-// app.use('/api/v1/files', filesRouter);
-
-// app.get('/health', (req, res) => {
-//   res.json({ status: 'ok', timestamp: new Date().toISOString() });
-// });
-
-// app.use((req, res) => {
-//   res.status(404).json({ error: 'Route not found' });
-// });
-
-// app.use((err, req, res, next) => {
-//   console.error(err.stack);
-//   res.status(500).json({ error: 'Something went wrong' });
-// });
-
-// app.listen(PORT, () => {
-//   console.log(`Server running on http://localhost:${PORT}`);
-// });
-
-
-
-
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -73,25 +21,47 @@ const { setupWSConnection, setPersistence, docs } = require('y-websocket/bin/uti
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 const PORT       = process.env.PORT || 8080;   // Azure sets this automatically
-const CLIENT_URL = process.env.CLIENT_URL;
-
 const MAX_USERS    = 5;
 const ROOM_TTL     = 7200;
 const AUTOCLOSE_MS = 2 * 60 * 60 * 1000;
 const DEBOUNCE_MS  = 2000;
+
+// ─── CORS Helper ─────────────────────────────────────────────────────────────
+const allowedOrigins = (process.env.CLIENT_URL || '')
+  .split(',')
+  .map((s) => s.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // allow server-to-server or non-browser requests
+  const clean = origin.replace(/\/+$/, '');
+  if (allowedOrigins.length === 0) return true;
+  if (allowedOrigins.includes(clean)) return true;
+  if (clean.endsWith('.vercel.app') || clean.includes('localhost') || clean.includes('127.0.0.1')) {
+    return true;
+  }
+  return false;
+};
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
 
 // ─── Express ─────────────────────────────────────────────────────────────────
 const app = express();
 
 app.set('trust proxy', 1); // Required for Azure proxy
 
-app.use(cors({
-  origin: CLIENT_URL,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use(passport.initialize());
 
@@ -118,9 +88,10 @@ const server = http.createServer(app);
 // ─── Yjs WebSocket ───────────────────────────────────────────────────────────
 const wss = new WebSocketServer({ noServer: true });
 
-const roomFileMap  = new Map();
-const saveTimers   = new Map();
+const roomFileMap     = new Map();
+const saveTimers      = new Map();
 const autoCloseTimers = new Map();
+const emptyRoomTimers = new Map();
 
 setPersistence({
   bindState: async (docName, ydoc) => {
@@ -178,8 +149,21 @@ function scheduleSave(docName, ydoc) {
 }
 
 async function flushSave(docName, ydoc) {
-  const fileId = roomFileMap.get(docName);
+  let fileId = roomFileMap.get(docName);
+  if (!fileId) {
+    try {
+      const metaRaw = await redis.get(`room:${docName}:meta`);
+      if (metaRaw) {
+        const meta = JSON.parse(metaRaw);
+        if (meta.fileId) {
+          fileId = meta.fileId;
+          roomFileMap.set(docName, fileId);
+        }
+      }
+    } catch {}
+  }
   if (!fileId) return;
+
   const code = ydoc.getText('monaco').toString();
   try {
     await File.findByIdAndUpdate(fileId, { code, updatedAt: new Date() });
@@ -201,6 +185,11 @@ function armAutoClose(docName) {
 }
 
 async function teardownRoom(roomId) {
+  if (emptyRoomTimers.has(roomId)) {
+    clearTimeout(emptyRoomTimers.get(roomId));
+    emptyRoomTimers.delete(roomId);
+  }
+
   const ydoc = docs.get(roomId);
   if (ydoc) {
     const t = saveTimers.get(roomId);
@@ -239,13 +228,15 @@ server.on('upgrade', (request, socket, head) => {
 // ─── Socket.IO ───────────────────────────────────────────────────────────────
 const io = new SocketIOServer(server, {
   cors: {
-    origin: CLIENT_URL,
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) callback(null, true);
+      else callback(new Error('Not allowed by CORS'));
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },
   transports: ['websocket', 'polling'],
   allowEIO3: true,
-  // Socket.IO stays on default /socket.io path
 });
 
 const rKeys = {
@@ -283,23 +274,41 @@ const removeUserFromRoom = async (roomId, socketId) => {
   if (!roomId) return;
   await redis.hdel(rKeys.users(roomId), socketId);
   const remaining = await redis.hlen(rKeys.users(roomId));
+
   if (remaining === 0) {
-    await cleanupRoom(roomId);
     io.to(roomId).emit('users-update', { users: [] });
+
+    // Give 45 seconds grace period before teardown to allow page reloads
+    if (!emptyRoomTimers.has(roomId)) {
+      const timer = setTimeout(async () => {
+        emptyRoomTimers.delete(roomId);
+        const currentCount = await redis.hlen(rKeys.users(roomId));
+        if (currentCount === 0) {
+          console.log(`[collab] Room ${roomId} empty for 45s — tearing down`);
+          await teardownRoom(roomId);
+        }
+      }, 45000);
+      emptyRoomTimers.set(roomId, timer);
+    }
     return;
   }
+
   await broadcastUsers(roomId);
 };
 
 io.on('connection', (socket) => {
-  console.log('connected:', socket.id);
-
   socket.on('join-room', async ({
     roomId, username, userId,
     createIfMissing, language,
     fileName, fileId,
   }) => {
     if (!roomId || !username) return;
+
+    // Cancel pending teardown timer if user rejoins
+    if (emptyRoomTimers.has(roomId)) {
+      clearTimeout(emptyRoomTimers.get(roomId));
+      emptyRoomTimers.delete(roomId);
+    }
 
     const roomExists = await redis.exists(rKeys.lang(roomId));
 
@@ -318,6 +327,12 @@ io.on('connection', (socket) => {
       await refreshTTL(roomId);
       if (fileId) roomFileMap.set(roomId, fileId);
       console.log(`Room ${roomId} created by ${username}, fileId: ${fileId}`);
+    } else {
+      // Reconnection: If current user is original host, reassign host socket id
+      const hostUserId = await redis.get(rKeys.hostUser(roomId));
+      if (userId && hostUserId && String(userId) === String(hostUserId)) {
+        await redis.set(rKeys.host(roomId), socket.id);
+      }
     }
 
     const userCount = await redis.hlen(rKeys.users(roomId));
@@ -378,7 +393,7 @@ io.on('connection', (socket) => {
     await Promise.all(rooms.map((r) => removeUserFromRoom(r, socket.id)));
   });
 
-  socket.on('disconnect', () => console.log('disconnected:', socket.id));
+  socket.on('disconnect', () => {});
 });
 
 // ─── Start ───────────────────────────────────────────────────────────────────
